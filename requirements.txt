@@ -1,0 +1,9 @@
+yfinance>=0.2.66
+curl_cffi>=0.7.1
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+openpyxl>=3.1.0
+pyarrow>=14.0.0
+lightgbm>=4.0.0
+hmmlearn>=0.3.0; python_version < "3.14"

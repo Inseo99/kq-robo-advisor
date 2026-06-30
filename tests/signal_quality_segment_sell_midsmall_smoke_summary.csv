@@ -1,0 +1,3 @@
+﻿mode,threshold,events,edge_pct,random_pct,delta_vs_raw_pct,p_value,signal_side,ticker_segment,segment_split
+raw,,321,-0.11533424851842455,-0.07003328944801052,0.0,0.7,sell,mid_small,6
+quality,0.7,360,-0.4167629739625353,-0.04461999831504391,-0.30142872544411076,0.8,sell,mid_small,6
