@@ -6,10 +6,12 @@ import numpy as np
 
 from kq_tool.api.http_response import (
     JSON_CONTENT_TYPE,
+    ResponseWriter,
     content_headers,
     cors_headers,
     error_payload,
     json_response_body,
+    make_response_writer,
     no_cache_headers,
     send_body_response,
     send_empty_response,
@@ -41,6 +43,26 @@ def test_content_headers_stringifies_content_length() -> None:
         ("Content-Length", "12"),
     )
 
+def test_make_response_writer_binds_callbacks_and_writes_empty_body_and_json() -> None:
+    calls: list[tuple[str, object]] = []
+    writer = make_response_writer(
+        send_response=lambda code: calls.append(("status", code)),
+        send_header=lambda key, value: calls.append(("header", (key, value))),
+        end_headers=lambda: calls.append(("end", None)),
+        write_body=lambda data: calls.append(("body", data)),
+    )
+
+    assert isinstance(writer, ResponseWriter)
+    assert writer.empty(204) == {"code": 204}
+    body_result = writer.body(b"hello", "text/plain")
+    json_result = writer.json({"ok": True}, code=201)
+
+    assert body_result == {"code": 200, "content_type": "text/plain", "content_length": 5}
+    assert json_result["code"] == 201
+    assert json_result["content_type"] == "application/json; charset=utf-8"
+    assert calls[0] == ("status", 204)
+    assert ("body", b"hello") in calls
+    assert ("body", b'{"ok": true}') in calls
 def test_send_headers_applies_each_pair_in_order() -> None:
     sent: list[tuple[str, str]] = []
 
@@ -151,13 +173,10 @@ def test_send_json_action_sends_error_payload_and_reports_error() -> None:
 def test_server_reuses_http_response_helpers() -> None:
     import server
 
-    assert server._KQ_JSON_CONTENT_TYPE == JSON_CONTENT_TYPE
-    assert server._kq_content_headers is content_headers
     assert server._kq_cors_headers is cors_headers
     assert server._kq_error_payload is error_payload
-    assert server._kq_json_response_body is json_response_body
+    assert server._kq_make_response_writer is make_response_writer
     assert server._kq_no_cache_headers is no_cache_headers
-    assert server._kq_send_body_response is send_body_response
     assert server._kq_send_empty_response is send_empty_response
     assert server._kq_send_json_action is send_json_action
     assert server._kq_send_json_response is send_json_response
@@ -190,4 +209,7 @@ def test_server_handler_json_action_uses_success_and_error_paths() -> None:
     handler._json_action(lambda: (_ for _ in ()).throw(ValueError("bad")))
 
     assert sent == [({"ok": True}, 200), ({"error": "bad"}, 500)]
+
+
+
 

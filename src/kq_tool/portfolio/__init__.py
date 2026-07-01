@@ -1,4 +1,4 @@
-"""Portfolio allocation helpers."""
+﻿"""Portfolio allocation helpers."""
 
 from .allocation import (
     evaluate_asset_allocation_strategies,
@@ -18,6 +18,10 @@ from .recommender import (
     apply_signal_tilt,
     auto_regime_tilt,
     build_recommendation_report,
+    load_regime_alpha_summary,
+    probability_weighted_regime_target,
+    regime_probability_blend,
+    regime_alpha_signal_adjustment,
     default_asset_signal,
     signal_weight_multiplier,
     stock_analysis_to_asset_signal,
@@ -30,6 +34,10 @@ __all__ = [
     "apply_signal_tilt",
     "auto_regime_tilt",
     "build_recommendation_report",
+    "load_regime_alpha_summary",
+    "probability_weighted_regime_target",
+    "regime_probability_blend",
+    "regime_alpha_signal_adjustment",
     "combine_weight_sets",
     "default_asset_signal",
     "diversification_ratio",
@@ -47,3 +55,4 @@ __all__ = [
     "signal_weight_multiplier",
     "stock_analysis_to_asset_signal",
 ]
+

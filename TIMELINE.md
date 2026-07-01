@@ -12,6 +12,9 @@ existing `server.py` app runnable while extracting tested modules into
 - Alpha Decay v3 is applied as a validity/recheck layer, not as a guaranteed
   alpha engine.
 - New package scaffold exists under `src/kq_tool`.
+- Recommendation portfolio regime targets now blend current regime probabilities
+  at 70% with next-quarter probabilities at 30%, reducing overcommitment to a
+  single hard regime label while preserving the existing robo/Alpha Decay layer.
 - Screener and strategy validation now separate recent momentum from S2
   12-1 momentum, and the strategy tab can compare quant momentum, quant S2,
   and KOSPI on one chart through the backend `quant_compare` response.
@@ -73,6 +76,50 @@ existing `server.py` app runnable while extracting tested modules into
 - Legacy GET fallback routing now goes through `handle_legacy_get()` in
   `src/kq_tool/api/dispatcher.py`, reducing `Handler.do_GET()` to a helper
   call when the compatibility path is needed.
+- Stock and strategy-backtest endpoint action wrappers now live in
+  `src/kq_tool/api/actions.py`, moving query parsing and service invocation
+  glue out of `server.py Handler` while preserving legacy fallbacks.
+- Zero-argument JSON endpoints now share `run_json_service_action()`, so
+  screen, backtest, regime, and recommendation wrapper methods in `server.py`
+  delegate service execution through the API action layer.
+- Static-file reading and body emission are now composed by `serve_static_file()`
+  in `src/kq_tool/api/static_files.py`, further reducing `Handler._file()` to
+  callback wiring with a legacy fallback.
+- HTTP response callbacks are now bound through `ResponseWriter` in
+  `src/kq_tool/api/http_response.py`, letting `Handler._empty()`, `_file()`,
+  and `_json()` share a tested response adapter before falling back to legacy paths.
+- The duplicate inline legacy GET route table was removed from `server.py`;
+  fallback routing now depends on `handle_legacy_get()` and reports a clear 500
+  if API routing helpers are unavailable.
+- `Handler._api_services()` now depends directly on `build_server_api_services()`;
+  the duplicate inline service registry fallback and unused `_kq_build_api_services`
+  import were removed from `server.py`.
+- `Handler.do_GET()` now depends directly on `handle_dispatched_get_safely()` for
+  normal dispatch and `handle_legacy_get()` for compatibility fallback; older
+  intermediate dispatcher/apply-response branches were removed from `server.py`.
+- Stock and strategy-backtest Handler wrappers now depend directly on
+  `run_stock_action()` and `run_strategy_backtest_action()`; duplicate query
+  parsing fallbacks and direct parameter-helper imports were removed from `server.py`.
+- Screen, backtest, regime, and recommendation Handler wrappers now require
+  `run_json_service_action()`; duplicate direct `_json_action(...)` fallbacks were
+  removed from `server.py`.
+- `Handler._json_action()` now requires shared `send_json_action()` and no longer
+  keeps an inline try/except JSON fallback in `server.py`.
+- `Handler._json()` now delegates JSON serialization and response writing to
+  `ResponseWriter`/`send_json_response()` and no longer keeps direct
+  `json.dumps`/header fallback code in `server.py`.
+- `Handler._file()` now requires `serve_static_file()` and `ResponseWriter`,
+  removing direct `open(...)`, content-header, and body-response fallback code
+  from `server.py`.
+- JSON cleaning and API error payload generation in `server.py` are now
+  helper-only delegates, removing the remaining inline NumPy/NaN and
+  `{"error": ...}` fallback response code.
+- `Handler._cors()`, `_no_cache()`, and `_empty()` now require shared HTTP
+  response helpers, removing the last direct CORS/cache/empty-response header
+  fallback paths from `server.py`.
+- `KQServer` and `main()` now require the shared runtime helpers for server
+  creation, startup messages, URL generation, and browser policy execution,
+  removing direct socketserver/webbrowser fallback paths from `server.py`.
 - The threaded/reusable local HTTP server base class now lives in
   `src/kq_tool/api/runtime.py`, with `server.py` inheriting it when available.
 - `src/kq_tool/api/__init__.py` now exports the current dispatcher,
@@ -387,6 +434,39 @@ review-window tool. The next validation pass should separate:
 - ETF vs individual stock signals
 - buy-side vs sell-side signals
 - limit-move excluded vs included samples
+
+## 2026-07-01 — Regime Alpha Decay Validation
+- Added `src/kq_tool/validation/regime_alpha_decay.py` to group OOS Alpha Decay events by PiT macro regime.
+- Added `tests/validation_regime_alpha_decay.py` to compare each regime's actual signal edge against same-regime random-date placebo samples.
+- Added unit coverage for regime lookup, event grouping, same-regime random pools, and summary rows.
+
+## 2026-07-01 — Regime Alpha Decay Recommendation Gate
+- Connected regime Alpha Decay summary evidence to recommendation signal tilts.
+- Recommendation reports now keep the old neutral behavior when no summary CSV exists, and use `data/validation/regime_alpha_decay_summary.csv` when present.
+- Added tests for negative-excess weakening, summary CSV loading, and report payload exposure.
+
+## 2026-07-01 — Market Report Registration UI
+- Added `/api/market_report` GET/POST support for local market/analyst report review and registration.
+- AI market-regime tab now shows a scrollable report list with source URLs and local user-uploaded reports.
+- User-provided report text is appended to `data/market_reports/user_reports.md` and immediately reused by qualitative regime diagnostics.
+## 2026-07-01 — Market Commentary Regime Context
+- Added `src/kq_tool/regime/market_report.py` to score local market-commentary reports
+  against the four macro regimes and extract evidence sentences.
+- `/api/regime_ai` now includes a `market_report` qualitative context block when
+  a local report such as `data/market_report.txt` is available, without overriding
+  the quantitative TabPFN/LightGBM regime result.
+- The AI market-regime tab now displays report-supported regime, alignment with the
+  quantitative regime, confidence, and evidence snippets.
+## 2026-07-01 — Public Report Crawler for Regime Context
+- Added `src/kq_tool/data/report_crawler.py` and `collect_market_reports.py` to collect
+  compact public RSS/HTML market or analyst report snippets into
+  `data/market_reports/latest.md` for qualitative regime context.
+- Added disabled sample config `data/report_sources.example.json`; users opt in by
+  creating `data/report_sources.json` and enabling approved public sources.
+- Added offline unit tests for RSS parsing, HTML text extraction, source config loading,
+  markdown rendering, and sample config generation.
+
+
 
 
 

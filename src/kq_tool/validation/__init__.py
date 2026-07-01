@@ -1,6 +1,15 @@
-"""Validation reporting helpers."""
+﻿"""Validation reporting helpers."""
 
 from .costs import apply_signal_costs, net_edge_return, signal_trade_cost_rate
+from .regime_alpha_decay import (
+    DEFAULT_REGIMES,
+    UNKNOWN_REGIME,
+    random_return_pool_by_regime,
+    regime_at_date,
+    regime_summary_rows,
+    split_events_by_regime,
+    summarize_regime_alpha_decay,
+)
 from .reporting import (
     ValidationRow,
     best_quality_row,
@@ -11,15 +20,22 @@ from .reporting import (
 from .segments import segment_split_for_top, signal_names_for_side, ticker_segment
 
 __all__ = [
+    "DEFAULT_REGIMES",
+    "UNKNOWN_REGIME",
     "ValidationRow",
     "apply_signal_costs",
     "best_quality_row",
     "format_signal_quality_markdown",
     "load_signal_quality_summary",
     "net_edge_return",
+    "random_return_pool_by_regime",
     "rank_quality_rows",
+    "regime_at_date",
+    "regime_summary_rows",
     "segment_split_for_top",
     "signal_trade_cost_rate",
     "signal_names_for_side",
+    "split_events_by_regime",
+    "summarize_regime_alpha_decay",
     "ticker_segment",
 ]

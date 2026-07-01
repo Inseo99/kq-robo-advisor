@@ -26,9 +26,8 @@ except Exception:
     subprocess.check_call([sys.executable,'-m','pip','install','-q','--upgrade','yfinance','curl_cffi'],
                           stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
-import http.server, socketserver, json, os, threading, webbrowser, time
+import http.server, os, threading, time, json
 import traceback, warnings, logging, random
-from urllib.parse import urlparse, parse_qs
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np, pandas as pd
 from scipy.optimize import curve_fit, minimize
@@ -77,28 +76,21 @@ except Exception as _config_mod_e:
     _KQ_CONFIG_SIGNAL_DIRECTION = None
 
 try:
-    from kq_tool.api.dispatcher import apply_api_response as _kq_apply_api_response
-    from kq_tool.api.dispatcher import dispatch_get as _kq_dispatch_get
-    from kq_tool.api.dispatcher import handle_dispatched_get as _kq_handle_dispatched_get
+    from kq_tool.api.actions import run_json_service_action as _kq_run_json_service_action
+    from kq_tool.api.actions import run_stock_action as _kq_run_stock_action
+    from kq_tool.api.actions import run_strategy_backtest_action as _kq_run_strategy_backtest_action
     from kq_tool.api.dispatcher import handle_dispatched_get_safely as _kq_handle_dispatched_get_safely
     from kq_tool.api.dispatcher import handle_legacy_get as _kq_handle_legacy_get
     from kq_tool.api.health import build_health_payload as _kq_build_health_payload
     from kq_tool.api.health import build_server_health_payload as _kq_build_server_health_payload
     from kq_tool.api.http_response import (
-        JSON_CONTENT_TYPE as _KQ_JSON_CONTENT_TYPE,
-        content_headers as _kq_content_headers,
         cors_headers as _kq_cors_headers,
         error_payload as _kq_error_payload,
-        json_response_body as _kq_json_response_body,
+        make_response_writer as _kq_make_response_writer,
         no_cache_headers as _kq_no_cache_headers,
-        send_body_response as _kq_send_body_response,
         send_empty_response as _kq_send_empty_response,
         send_json_action as _kq_send_json_action,
         send_json_response as _kq_send_json_response,
-    )
-    from kq_tool.api.params import (
-        parse_stock_params as _kq_parse_stock_params,
-        parse_strategy_backtest_params as _kq_parse_strategy_backtest_params,
     )
     from kq_tool.api.runtime import (
         ThreadingReusableHTTPServer as _KQThreadingReusableHTTPServer,
@@ -114,31 +106,25 @@ try:
         startup_intro_messages as _kq_startup_intro_messages,
         yfinance_status_messages as _kq_yfinance_status_messages,
     )
-    from kq_tool.api.services import build_api_services as _kq_build_api_services
     from kq_tool.api.services import build_server_api_services as _kq_build_server_api_services
     from kq_tool.api.serialization import clean_json_value as _kq_clean_json_value
-    from kq_tool.api.static_files import read_static_file as _kq_read_static_file
+    from kq_tool.api.static_files import serve_static_file as _kq_serve_static_file
 except Exception as _api_mod_e:
     print(f'  [module] src/kq_tool api helper import 실패 - legacy 라우팅 사용: {_api_mod_e}')
-    _kq_apply_api_response = None
-    _kq_dispatch_get = None
-    _kq_handle_dispatched_get = None
+    _kq_run_json_service_action = None
+    _kq_run_stock_action = None
+    _kq_run_strategy_backtest_action = None
     _kq_handle_dispatched_get_safely = None
     _kq_handle_legacy_get = None
     _kq_build_health_payload = None
     _kq_build_server_health_payload = None
-    _KQ_JSON_CONTENT_TYPE = 'application/json; charset=utf-8'
-    _kq_content_headers = None
     _kq_cors_headers = None
     _kq_error_payload = None
-    _kq_json_response_body = None
+    _kq_make_response_writer = None
     _kq_no_cache_headers = None
-    _kq_send_body_response = None
     _kq_send_empty_response = None
     _kq_send_json_action = None
     _kq_send_json_response = None
-    _kq_parse_stock_params = None
-    _kq_parse_strategy_backtest_params = None
     _KQThreadingReusableHTTPServer = None
     _kq_browser_autostart_disabled_message = None
     _kq_create_http_server = None
@@ -151,10 +137,9 @@ except Exception as _api_mod_e:
     _kq_should_auto_open_browser = None
     _kq_startup_intro_messages = None
     _kq_yfinance_status_messages = None
-    _kq_build_api_services = None
     _kq_build_server_api_services = None
     _kq_clean_json_value = None
-    _kq_read_static_file = None
+    _kq_serve_static_file = None
 
 try:
     from kq_tool.data.cache import cached as _kq_cached
@@ -290,7 +275,11 @@ try:
         auto_regime_tilt as _kq_auto_regime_tilt,
         build_recommendation_report as _kq_build_recommendation_report,
         default_asset_signal as _kq_default_asset_signal,
+        load_regime_alpha_summary as _kq_load_regime_alpha_summary,
         portfolio_validity as _kq_portfolio_validity,
+        probability_weighted_regime_target as _kq_probability_weighted_regime_target,
+        regime_probability_blend as _kq_regime_probability_blend,
+        regime_alpha_signal_adjustment as _kq_regime_alpha_signal_adjustment,
         signal_weight_multiplier as _kq_signal_weight_multiplier,
         stock_analysis_to_asset_signal as _kq_stock_analysis_to_asset_signal,
     )
@@ -316,7 +305,11 @@ except Exception as _portfolio_mod_e:
     _kq_auto_regime_tilt = None
     _kq_build_recommendation_report = None
     _kq_default_asset_signal = None
+    _kq_load_regime_alpha_summary = None
     _kq_portfolio_validity = None
+    _kq_probability_weighted_regime_target = None
+    _kq_regime_probability_blend = None
+    _kq_regime_alpha_signal_adjustment = None
     _kq_signal_weight_multiplier = None
     _kq_stock_analysis_to_asset_signal = None
 
@@ -375,6 +368,8 @@ try:
         build_macro_payload as _kq_build_macro_payload,
     )
     from kq_tool.regime.response import build_regime_ai_payload as _kq_build_regime_ai_payload
+    from kq_tool.regime.market_report import build_market_report_context as _kq_build_market_report_context
+    from kq_tool.regime.market_report import save_user_market_report as _kq_save_user_market_report
     _KQ_REGIME_HELPERS_READY = True
 except Exception as _regime_mod_e:
     print(f'  [module] src/kq_tool regime helper import 실패 - legacy 국면 함수 사용: {_regime_mod_e}')
@@ -383,6 +378,8 @@ except Exception as _regime_mod_e:
     _KQ_REGIME_DEFINITION = None
     _kq_build_macro_payload = None
     _kq_build_regime_ai_payload = None
+    _kq_build_market_report_context = None
+    _kq_save_user_market_report = None
 
 try:
     from kq_tool.screener.engine import build_screener_record as _kq_build_screener_record
@@ -2379,6 +2376,55 @@ def _meta_base_weights():
     return _combine_weight_sets(sets)
 
 
+def _regime_probability_blend(snapshot, current_weight=0.70, next_weight=0.30, regimes=None):
+    if _KQ_PORTFOLIO_HELPERS_READY and _kq_regime_probability_blend is not None:
+        return _kq_regime_probability_blend(
+            snapshot,
+            current_weight=current_weight,
+            next_weight=next_weight,
+            regimes=tuple(regimes or REGIME_TARGETS.keys()),
+        )
+    regime_names = list(regimes or REGIME_TARGETS.keys())
+    current_probs = snapshot.get('probs') or {}
+    if not isinstance(current_probs, dict):
+        current_probs = {}
+    next_probs = snapshot.get('next_quarter') or {}
+    if not isinstance(next_probs, dict):
+        next_probs = {}
+    current = snapshot.get('current') or snapshot.get('current_regime')
+    if not current_probs and current:
+        current_probs = {str(current): 1.0}
+    blended = {}
+    for regime in regime_names:
+        try:
+            cur_prob = float(current_probs.get(regime, 0.0))
+        except Exception:
+            cur_prob = 0.0
+        try:
+            nxt_prob = float(next_probs.get(regime, 0.0))
+        except Exception:
+            nxt_prob = 0.0
+        prob = current_weight * cur_prob + next_weight * nxt_prob
+        if prob > 0:
+            blended[regime] = prob
+    if not blended and current in regime_names:
+        blended[str(current)] = 1.0
+    return _normalize_weights(blended)
+
+
+def _probability_weighted_regime_target(snapshot):
+    if _KQ_PORTFOLIO_HELPERS_READY and _kq_probability_weighted_regime_target is not None:
+        return _kq_probability_weighted_regime_target(snapshot, REGIME_TARGETS)
+    blend = _regime_probability_blend(snapshot, regimes=REGIME_TARGETS.keys())
+    if not blend:
+        current = snapshot.get('current') or snapshot.get('current_regime') or '리플레이션'
+        return _normalize_weights(REGIME_TARGETS.get(str(current), REGIME_TARGETS['리플레이션']))
+    return _combine_weight_sets(
+        (prob, REGIME_TARGETS.get(regime))
+        for regime, prob in blend.items()
+        if REGIME_TARGETS.get(regime)
+    )
+
 def _portfolio_validity(snapshot):
     if _KQ_PORTFOLIO_HELPERS_READY:
         return _kq_portfolio_validity(snapshot)
@@ -2529,11 +2575,25 @@ def recommend_portfolio():
     return _cached('recommend_portfolio', 300, _build_recommend_portfolio)
 
 
+def _load_recommendation_regime_alpha_summary():
+    if not (_KQ_PORTFOLIO_HELPERS_READY and _kq_load_regime_alpha_summary is not None):
+        return []
+    candidates = [
+        os.path.join(BASE_DIR, 'data', 'validation', 'regime_alpha_decay_summary.csv'),
+        os.path.join(BASE_DIR, 'data', 'validation', 'regime_alpha_decay_results_summary.csv'),
+    ]
+    for path in candidates:
+        rows = _kq_load_regime_alpha_summary(path)
+        if rows:
+            return rows
+    return []
+
+
 def _build_recommend_portfolio():
     snapshot = _current_regime_snapshot()
     current = snapshot['current']
     base = _meta_base_weights()
-    target = REGIME_TARGETS.get(current, REGIME_TARGETS['리플레이션'])
+    target = _probability_weighted_regime_target(snapshot)
     auto = _auto_regime_tilt(snapshot)
     regime_tilt = auto['regime_tilt']
     pre_signal_weights = _combine_weight_sets([(1.0 - regime_tilt, base), (regime_tilt, target)])
@@ -2569,6 +2629,7 @@ def _build_recommend_portfolio():
             signal_map=signal_map,
             etf_meta=ETFs,
             components=META_COMPONENTS,
+            regime_alpha_summary=_load_recommendation_regime_alpha_summary(),
         )
 
     final_weights, signal_multipliers = _apply_signal_tilt(pre_signal_weights, signal_map)
@@ -2599,9 +2660,11 @@ def _build_recommend_portfolio():
         validity=validity,
         automation=auto,
         construction=dict(
-            method=f'안정성 검증 포트폴리오 앙상블 {base_pct:.0f}% + 현재 국면 틸트 {tilt_pct:.0f}% + 로보/Alpha Decay 미세조정',
+            method=f'안정성 검증 포트폴리오 앙상블 {base_pct:.0f}% + 확률가중 국면 틸트 {tilt_pct:.0f}% + 로보/Alpha Decay 미세조정',
             components=META_COMPONENTS,
             base_weights={k: round(v*100, 1) for k, v in base.items()},
+            regime_probability_blend={k: round(v*100, 1) for k, v in _regime_probability_blend(snapshot).items()},
+            regime_target_source='현재 국면 확률 70% + 다음 분기 국면 확률 30%',
             regime_target={k: round(v*100, 1) for k, v in target.items()},
             pre_signal_weights={k: round(v*100, 1) for k, v in pre_signal_weights.items()},
             signal_multipliers=signal_multipliers,
@@ -2614,20 +2677,66 @@ def _build_recommend_portfolio():
     )
 # ── JSON 직렬화 ──────────────────────────────────────────────────────────
 def _clean(obj):
-    if _kq_clean_json_value is not None:
-        return _kq_clean_json_value(obj)
-    if isinstance(obj,dict):  return {k:_clean(v) for k,v in obj.items()}
-    if isinstance(obj,list):  return [_clean(i) for i in obj]
-    if isinstance(obj,(np.integer,)): return int(obj)
-    if isinstance(obj,(np.floating,)):return None if np.isnan(obj) else float(obj)
-    if isinstance(obj,np.ndarray):    return obj.tolist()
-    if isinstance(obj,bool):          return bool(obj)
-    return obj
+    if _kq_clean_json_value is None:
+        raise RuntimeError('JSON serialization helper is unavailable')
+    return _kq_clean_json_value(obj)
 
 def _api_error_payload(error):
-    if _kq_error_payload is not None:
-        return _kq_error_payload(error)
-    return {'error': str(error)}
+    if _kq_error_payload is None:
+        raise RuntimeError('API error payload helper is unavailable')
+    return _kq_error_payload(error)
+
+def _attach_market_report_context(payload, regime_order=None):
+    if _kq_build_market_report_context is None:
+        payload['market_report'] = dict(
+            available=False,
+            source=None,
+            summary='시장시황보고서 분석 helper를 사용할 수 없어 정량 매크로 국면만 사용합니다.',
+        )
+        return payload
+    current = payload.get('current_regime') or payload.get('current')
+    order = payload.get('regime_order') or regime_order
+    payload['market_report'] = _kq_build_market_report_context(
+        BASE_DIR,
+        current_regime=current,
+        regime_order=order,
+    )
+    return payload
+
+
+
+def build_market_report_response():
+    current = None
+    regime_order = None
+    try:
+        snapshot = _current_regime_snapshot()
+        current = snapshot.get('current') or snapshot.get('current_regime')
+    except Exception:
+        current = None
+    try:
+        import regime_model as _rm_mod
+        regime_order = list(getattr(_rm_mod, 'REGIMES', []) or []) or None
+    except Exception:
+        regime_order = None
+    if _kq_build_market_report_context is None:
+        return dict(ok=False, market_report=dict(available=False, reports=[], summary='시장시황보고서 helper를 사용할 수 없습니다.'))
+    return dict(ok=True, market_report=_kq_build_market_report_context(BASE_DIR, current_regime=current, regime_order=regime_order))
+
+
+def register_market_report(payload):
+    if _kq_save_user_market_report is None:
+        raise RuntimeError('시장시황보고서 등록 helper를 사용할 수 없습니다.')
+    payload = payload or {}
+    saved = _kq_save_user_market_report(
+        BASE_DIR,
+        title=str(payload.get('title') or payload.get('name') or '사용자 등록 리포트'),
+        text=str(payload.get('text') or payload.get('content') or ''),
+        url=str(payload.get('url') or ''),
+        source=str(payload.get('source') or '사용자 등록'),
+    )
+    response = build_market_report_response()
+    response['saved'] = saved
+    return response
 
 def build_regime_ai_response():
     """AI 매크로 국면 인식 결과 반환 payload를 만든다."""
@@ -2640,18 +2749,19 @@ def build_regime_ai_response():
             regime_order = _rm_mod.REGIMES
         except Exception:
             pass
-        return _kq_build_regime_ai_payload(
+        payload = _kq_build_regime_ai_payload(
             REGIME_MODEL,
             MACRO,
             regime_desc=regime_desc,
             regime_order=regime_order,
         )
+        return _attach_market_report_context(payload, regime_order=regime_order)
 
     if REGIME_MODEL is None or not REGIME_MODEL.trained:
         fallback = dict(MACRO)
         fallback['model_type'] = 'Rule-based (모델 미학습)'
         fallback['model_status'] = 'not_trained'
-        return fallback
+        return _attach_market_report_context(fallback)
 
     result = REGIME_MODEL.predict_current()
     if result is None:
@@ -2668,13 +2778,12 @@ def build_regime_ai_response():
     result['sample_count'] = (
         len(REGIME_MODEL.train_data) if REGIME_MODEL.train_data is not None else 0
     )
-    return result
-
+    return _attach_market_report_context(result)
 
 def build_health_response():
     """Local startup health payload for smoke tests and team handoff."""
     module_flags = {
-        'api': _kq_dispatch_get is not None,
+        'api': _kq_handle_dispatched_get_safely is not None,
         'data': bool(_KQ_DATA_HELPERS_READY),
         'analyzer': bool(_KQ_MODULAR_HELPERS_READY),
         'portfolio': bool(_KQ_PORTFOLIO_HELPERS_READY),
@@ -2729,116 +2838,98 @@ def build_health_response():
     )
 
 # ── HTTP 서버 ─────────────────────────────────────────────────────────────
-if _KQThreadingReusableHTTPServer is not None:
-    class KQServer(_KQThreadingReusableHTTPServer):
-        pass
-else:
-    class KQServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-        daemon_threads = True
-        allow_reuse_address = True
+if _KQThreadingReusableHTTPServer is None:
+    raise RuntimeError('HTTP server runtime helper is unavailable')
+
+class KQServer(_KQThreadingReusableHTTPServer):
+    pass
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self,*a): pass
 
     def _cors(self):
-        if _kq_cors_headers is not None:
-            for key, value in _kq_cors_headers():
-                self.send_header(key, value)
-            return
-        self.send_header('Access-Control-Allow-Origin','*')
-        self.send_header('Access-Control-Allow-Methods','GET,OPTIONS')
-        self.send_header('Access-Control-Allow-Headers','Content-Type')
+        if _kq_cors_headers is None:
+            raise RuntimeError('CORS header helper is unavailable')
+        for key, value in _kq_cors_headers():
+            self.send_header(key, value)
 
     def _no_cache(self):
-        if _kq_no_cache_headers is not None:
-            for key, value in _kq_no_cache_headers():
-                self.send_header(key, value)
-            return
-        self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0')
-        self.send_header('Pragma','no-cache')
-        self.send_header('Expires','0')
+        if _kq_no_cache_headers is None:
+            raise RuntimeError('No-cache header helper is unavailable')
+        for key, value in _kq_no_cache_headers():
+            self.send_header(key, value)
 
     def do_OPTIONS(self):
         self._empty(200)
 
+    def _response_writer(self):
+        if _kq_make_response_writer is None:
+            return None
+        write_body = getattr(getattr(self, 'wfile', None), 'write', None)
+        if write_body is None:
+            return None
+        return _kq_make_response_writer(
+            send_response=self.send_response,
+            send_header=self.send_header,
+            end_headers=self.end_headers,
+            write_body=write_body,
+        )
+
     def _empty(self, code):
-        if _kq_send_empty_response is not None:
-            return _kq_send_empty_response(
-                send_response=self.send_response,
-                send_header=self.send_header,
-                end_headers=self.end_headers,
-                code=code,
-            )
-        self.send_response(code); self._cors(); self.end_headers()
+        writer = self._response_writer()
+        if writer is not None:
+            return writer.empty(code)
+        if _kq_send_empty_response is None:
+            raise RuntimeError('Empty response helper is unavailable')
+        return _kq_send_empty_response(
+            send_response=self.send_response,
+            send_header=self.send_header,
+            end_headers=self.end_headers,
+            code=code,
+        )
 
     def _api_services(self):
-        if _kq_build_server_api_services is not None:
-            return _kq_build_server_api_services(
-                health=build_health_response,
-                macro_payload=MACRO,
-                stock=analyze_stock,
-                screen=run_screener,
-                backtest=run_backtest,
-                stratbt=run_strategy_backtest,
-                regime_ai=build_regime_ai_response,
-                recommend_portfolio=recommend_portfolio,
-            )
-        services = {
-            'health': build_health_response,
-            'macro': lambda: MACRO,
-            'stock': analyze_stock,
-            'screen': run_screener,
-            'backtest': run_backtest,
-            'stratbt': run_strategy_backtest,
-            'regime_ai': build_regime_ai_response,
-            'recommend_portfolio': recommend_portfolio,
-        }
-        if _kq_build_api_services is not None:
-            return _kq_build_api_services(**services)
-        return services
+        if _kq_build_server_api_services is None:
+            raise RuntimeError('API service registry helper is unavailable')
+        return _kq_build_server_api_services(
+            health=build_health_response,
+            macro_payload=MACRO,
+            stock=analyze_stock,
+            screen=run_screener,
+            backtest=run_backtest,
+            stratbt=run_strategy_backtest,
+            regime_ai=build_regime_ai_response,
+            recommend_portfolio=recommend_portfolio,
+            market_report=build_market_report_response,
+        )
+
+    def _read_json_body(self, max_bytes=2000000):
+        length = int(self.headers.get('Content-Length') or 0)
+        if length <= 0:
+            return {}
+        if length > max_bytes:
+            raise ValueError('요청 본문이 너무 큽니다. 2MB 이하 텍스트만 등록하세요.')
+        raw = self.rfile.read(length)
+        return json.loads(raw.decode('utf-8-sig'))
+
+    def do_POST(self):
+        path = self.path.split('?', 1)[0]
+        if path == '/api/market_report':
+            return self._market_report_register()
+        return self._empty(404)
 
     def do_GET(self):
-        if _kq_dispatch_get is not None:
-            if _kq_handle_dispatched_get_safely is not None:
-                _kq_handle_dispatched_get_safely(
-                    self.path,
-                    self._api_services(),
-                    send_file=self._file,
-                    send_json=self._json,
-                    send_empty=self._empty,
-                    send_error=lambda exc: self._json(_api_error_payload(exc), 500),
-                    on_error=lambda exc: traceback.print_exc(),
-                )
-                return
-            try:
-                if _kq_handle_dispatched_get is not None:
-                    _kq_handle_dispatched_get(
-                        self.path,
-                        self._api_services(),
-                        send_file=self._file,
-                        send_json=self._json,
-                        send_empty=self._empty,
-                    )
-                else:
-                    response = _kq_dispatch_get(self.path, self._api_services())
-                    if _kq_apply_api_response is not None:
-                        _kq_apply_api_response(
-                            response,
-                            send_file=self._file,
-                            send_json=self._json,
-                            send_empty=self._empty,
-                        )
-                    elif response.kind == 'file':
-                        self._file(response.payload, response.content_type)
-                    elif response.kind == 'json':
-                        self._json(response.payload, response.code)
-                    else:
-                        self._empty(response.code)
-                return
-            except Exception as e:
-                traceback.print_exc()
-                self._json(_api_error_payload(e), 500)
-                return
+        if _kq_handle_dispatched_get_safely is not None:
+            _kq_handle_dispatched_get_safely(
+                self.path,
+                self._api_services(),
+                send_file=self._file,
+                send_json=self._json,
+                send_empty=self._empty,
+                send_error=lambda exc: self._json(_api_error_payload(exc), 500),
+                on_error=lambda exc: traceback.print_exc(),
+            )
+            return
 
         if _kq_handle_legacy_get is not None:
             _kq_handle_legacy_get(
@@ -2857,210 +2948,150 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             return
 
-        parsed = urlparse(self.path)
-        qs = parse_qs(parsed.query)
-        p  = parsed.path
-
-        if   p == '/':            self._file('index.html','text/html; charset=utf-8')
-        elif p == '/api/stock':   self._stock(qs)
-        elif p == '/api/screen':  self._screen()
-        elif p == '/api/backtest':self._backtest()
-        elif p == '/api/stratbt': self._stratbt(qs)
-        elif p == '/api/macro':   self._json(MACRO)
-        elif p == '/api/regime_ai': self._regime_ai()
-        elif p == '/api/recommend_portfolio': self._recommend_portfolio()
-        elif p == '/api/health':  self._json(build_health_response())
-        elif p == '/api/ping':    self._json({'ok':True})
-        else: self._empty(404)
+        self._json(_api_error_payload('API routing helpers are unavailable'), 500)
 
     def _file(self,name,ct):
-        try:
-            if _kq_read_static_file is not None:
-                payload = _kq_read_static_file(BASE_DIR, name, ct)
-                data = payload.data
-                ct = payload.content_type
-            else:
-                fp=os.path.join(BASE_DIR,name)
-                data=open(fp,'rb').read()
-            if _kq_send_body_response is not None:
-                return _kq_send_body_response(
-                    send_response=self.send_response,
-                    send_header=self.send_header,
-                    end_headers=self.end_headers,
-                    write_body=self.wfile.write,
-                    body=data,
-                    content_type=ct,
-                    code=200,
-                )
-            self.send_response(200)
-            if _kq_content_headers is not None:
-                for key, value in _kq_content_headers(ct, len(data)):
-                    self.send_header(key, value)
-            else:
-                self.send_header('Content-Type',ct)
-                self.send_header('Content-Length',len(data))
-            self._cors(); self._no_cache(); self.end_headers(); self.wfile.write(data)
-        except FileNotFoundError:
-            self._empty(404)
+        if _kq_serve_static_file is None:
+            raise RuntimeError('Static file helper is unavailable')
+        writer = self._response_writer()
+        if writer is None:
+            raise RuntimeError('HTTP response body writer is unavailable')
+        return _kq_serve_static_file(
+            BASE_DIR,
+            name,
+            ct,
+            send_body=lambda data, content_type: writer.body(data, content_type, code=200),
+            send_empty=self._empty,
+        )
 
     def _json(self, obj, code=200):
-        if _kq_send_json_response is not None:
-            return _kq_send_json_response(
-                obj,
-                send_response=self.send_response,
-                send_header=self.send_header,
-                end_headers=self.end_headers,
-                write_body=self.wfile.write,
-                code=code,
-                cleaner=_clean,
-            )
-        body = (
-            _kq_json_response_body(obj, cleaner=_clean)
-            if _kq_json_response_body is not None
-            else json.dumps(_clean(obj),ensure_ascii=False).encode('utf-8')
+        writer = self._response_writer()
+        if writer is not None:
+            return writer.json(obj, code=code, cleaner=_clean)
+        if _kq_send_json_response is None:
+            raise RuntimeError('JSON response helper is unavailable')
+        write_body = getattr(getattr(self, 'wfile', None), 'write', None)
+        if write_body is None:
+            raise RuntimeError('HTTP response body writer is unavailable')
+        return _kq_send_json_response(
+            obj,
+            send_response=self.send_response,
+            send_header=self.send_header,
+            end_headers=self.end_headers,
+            write_body=write_body,
+            code=code,
+            cleaner=_clean,
         )
-        self.send_response(code)
-        if _kq_content_headers is not None:
-            for key, value in _kq_content_headers(_KQ_JSON_CONTENT_TYPE, len(body)):
-                self.send_header(key, value)
-        else:
-            self.send_header('Content-Type','application/json; charset=utf-8')
-            self.send_header('Content-Length',len(body))
-        self._cors(); self._no_cache(); self.end_headers(); self.wfile.write(body)
 
     def _json_action(self, action):
-        if _kq_send_json_action is not None:
-            return _kq_send_json_action(
-                action,
-                send_json=self._json,
-                error_payload_fn=_api_error_payload,
-                on_error=lambda exc: traceback.print_exc(),
-            )
-        try:    self._json(action())
-        except Exception as e:
-            traceback.print_exc()
-            self._json(_api_error_payload(e),500)
+        if _kq_send_json_action is None:
+            raise RuntimeError('JSON action helper is unavailable')
+        return _kq_send_json_action(
+            action,
+            send_json=self._json,
+            error_payload_fn=_api_error_payload,
+            on_error=lambda exc: traceback.print_exc(),
+        )
 
     def _stock(self, qs):
-        if _kq_parse_stock_params is not None:
-            params = _kq_parse_stock_params(qs)
-            ticker, period = params.ticker, params.period
-        else:
-            ticker = qs.get('t',['005930.KS'])[0].strip()
-            period = qs.get('p',['1y'])[0]
-        self._json_action(lambda: analyze_stock(ticker, period))
+        if _kq_run_stock_action is None:
+            raise RuntimeError('Stock action helper is unavailable')
+        return _kq_run_stock_action(
+            qs,
+            analyze_stock=analyze_stock,
+            json_action=self._json_action,
+        )
 
     def _screen(self):
-        self._json_action(run_screener)
+        if _kq_run_json_service_action is None:
+            raise RuntimeError('JSON service action helper is unavailable')
+        return _kq_run_json_service_action(run_screener, json_action=self._json_action)
+
+    def _market_report(self):
+        if _kq_run_json_service_action is None:
+            raise RuntimeError('JSON service action helper is unavailable')
+        return _kq_run_json_service_action(build_market_report_response, json_action=self._json_action)
+
+    def _market_report_register(self):
+        try:
+            payload = self._read_json_body()
+            self._json(register_market_report(payload))
+        except Exception as exc:
+            traceback.print_exc()
+            self._json(_api_error_payload(exc), 400)
 
     def _regime_ai(self):
         """AI 매크로 국면 인식 결과 반환 (TabPFN + HMM)"""
-        self._json_action(build_regime_ai_response)
+        if _kq_run_json_service_action is None:
+            raise RuntimeError('JSON service action helper is unavailable')
+        return _kq_run_json_service_action(build_regime_ai_response, json_action=self._json_action)
 
 
     def _recommend_portfolio(self):
-        self._json_action(recommend_portfolio)
+        if _kq_run_json_service_action is None:
+            raise RuntimeError('JSON service action helper is unavailable')
+        return _kq_run_json_service_action(recommend_portfolio, json_action=self._json_action)
     def _backtest(self):
-        self._json_action(run_backtest)
+        if _kq_run_json_service_action is None:
+            raise RuntimeError('JSON service action helper is unavailable')
+        return _kq_run_json_service_action(run_backtest, json_action=self._json_action)
 
     def _stratbt(self, qs):
-        if _kq_parse_strategy_backtest_params is not None:
-            params = _kq_parse_strategy_backtest_params(qs)
-            strategy = params.strategy
-            top_n = params.top_n
-            rebalance = params.rebalance
-            period = params.period
-            transaction_cost_bps = params.transaction_cost_bps
-            slippage_bps = params.slippage_bps
-        else:
-            strategy  = qs.get('s',['quant'])[0]
-            top_n     = int(qs.get('n',['5'])[0])
-            rebalance = qs.get('r',['M'])[0]
-            period    = qs.get('p',['3y'])[0]
-            transaction_cost_bps = float(qs.get('tc',['0'])[0])
-            slippage_bps = float(qs.get('slip',['0'])[0])
-        self._json_action(lambda: run_strategy_backtest(
-            strategy, top_n, rebalance, period, transaction_cost_bps, slippage_bps
-        ))
+        if _kq_run_strategy_backtest_action is None:
+            raise RuntimeError('Strategy backtest action helper is unavailable')
+        return _kq_run_strategy_backtest_action(
+            qs,
+            run_strategy_backtest=run_strategy_backtest,
+            json_action=self._json_action,
+        )
 
 def main():
-    if _kq_startup_intro_messages is not None:
-        for line in _kq_startup_intro_messages():
-            print(line)
-    else:
-        print(f'\n=== KQ Quant Tool ===')
-        print('Yahoo Finance 연결 확인 중...')
+    runtime_helpers = {
+        'startup intro': _kq_startup_intro_messages,
+        'yfinance status': _kq_yfinance_status_messages,
+        'server URL': _kq_server_url,
+        'server ready messages': _kq_server_ready_messages,
+        'HTTP server factory': _kq_create_http_server,
+        'browser policy runner': _kq_run_server_with_browser_policy,
+    }
+    missing = [name for name, helper in runtime_helpers.items() if helper is None]
+    if missing:
+        raise RuntimeError('Runtime helpers are unavailable: ' + ', '.join(missing))
+
+    for line in _kq_startup_intro_messages():
+        print(line)
 
     yfinance_connected = _ensure_yf_session()
-    if _kq_yfinance_status_messages is not None:
-        for line in _kq_yfinance_status_messages(yfinance_connected):
-            print(line)
-    elif yfinance_connected:
-        print('OK 연결 성공 - 실시간 데이터로 동작합니다')
-    else:
-        print('WARN 연결 실패 - 샘플(시뮬레이션) 데이터로 동작합니다')
-        print('   네트워크/방화벽이 finance.yahoo.com, fc.yahoo.com 접속을 막고 있는지 확인해 주세요')
-        print('   (pip install --upgrade yfinance curl_cffi 로도 해결되는 경우가 많습니다)')
+    for line in _kq_yfinance_status_messages(yfinance_connected):
+        print(line)
 
-    url = _kq_server_url('127.0.0.1', PORT) if _kq_server_url is not None else f'http://127.0.0.1:{PORT}'
-    if _kq_server_ready_messages is not None:
-        for line in _kq_server_ready_messages(url):
-            print(line)
-    else:
-        print(url)
-        print('Chrome에서 위 주소를 열어 사용하세요.')
-        print('Ctrl+C 로 종료\n')
-    srv = (
-        _kq_create_http_server(KQServer, Handler, host='127.0.0.1', port=PORT)
-        if _kq_create_http_server is not None
-        else KQServer(('127.0.0.1', PORT), Handler)
-    )
+    url = _kq_server_url('127.0.0.1', PORT)
+    for line in _kq_server_ready_messages(url):
+        print(line)
 
-    if _kq_run_server_with_browser_policy is not None:
-        _kq_run_server_with_browser_policy(srv, os.environ, url)
-    else:
-        if _kq_schedule_browser_open is not None:
-            browser_schedule = _kq_schedule_browser_open(os.environ, url)
-            auto_open = bool(browser_schedule.get('scheduled'))
-        else:
-            def _open_browser():
-                browser = os.environ.get('KQ_BROWSER', '').strip().lower()
-                if _kq_open_preferred_browser is not None:
-                    _kq_open_preferred_browser(url, preferred_browser=browser)
-                    return
-                if browser == 'chrome':
-                    for name in ('chrome', 'google-chrome', 'chromium', 'chromium-browser'):
-                        try:
-                            webbrowser.get(name).open(url)
-                            return
-                        except Exception:
-                            pass
-                webbrowser.open(url)
-
-            auto_open = (
-                _kq_should_auto_open_browser(os.environ)
-                if _kq_should_auto_open_browser is not None
-                else os.environ.get('KQ_AUTO_OPEN_BROWSER', '0').strip() == '1'
-            )
-            if auto_open:
-                threading.Timer(1.0, _open_browser).start()
-
-        if not auto_open:
-            if _kq_browser_autostart_disabled_message is not None:
-                print(_kq_browser_autostart_disabled_message())
-            else:
-                print('브라우저 자동 열기 꺼짐: Edge가 뜨지 않도록 기본값을 변경했습니다.')
-
-        if _kq_serve_until_interrupted is not None:
-            _kq_serve_until_interrupted(srv)
-        else:
-            try:    srv.serve_forever()
-            except KeyboardInterrupt: print('\n종료')
-
-        return
-
+    srv = _kq_create_http_server(KQServer, Handler, host='127.0.0.1', port=PORT)
+    _kq_run_server_with_browser_policy(srv, os.environ, url)
+    return
 
 if __name__ == '__main__':
     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

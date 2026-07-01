@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from kq_tool.api.params import (
     first_query_value,
@@ -44,8 +44,9 @@ def test_parse_strategy_backtest_params_defaults_costs_to_zero() -> None:
     assert params.slippage_bps == 0.0
 
 
-def test_server_reuses_api_param_helpers() -> None:
+def test_server_keeps_param_parsing_inside_api_action_helpers() -> None:
     import server
 
-    assert server._kq_parse_stock_params is parse_stock_params
-    assert server._kq_parse_strategy_backtest_params is parse_strategy_backtest_params
+    assert not hasattr(server, "_kq_parse_stock_params")
+    assert not hasattr(server, "_kq_parse_strategy_backtest_params")
+
