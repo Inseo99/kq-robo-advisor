@@ -107,6 +107,7 @@ python -m pytest tests\unit -q
 python tests\smoke_api.py
 python tests\validation_signal_quality_alpha_decay.py --universe-source etf --top 3 --n 1 --min-quality 0.7 --cost-bps 10 --slippage-bps 5 --output tests\signal_quality_cost_smoke.npz
 python tests\validation_regime_alpha_decay.py --top 50 --n 200 --mode quality --min-quality 0.6 --signal-side buy
+python tests\export_dsr_inputs.py --start 2014-06-26
 ```
 
 ## 현재 구조
@@ -163,6 +164,7 @@ src/kq_tool/
     strategies.py
   validation/
     costs.py
+    factor_analysis.py
     regime_alpha_decay.py
     reporting.py
     segments.py
@@ -180,7 +182,7 @@ Alpha Decay 신호 방향, 로보 점수 가중치/라벨, 로보 매수/매도 
 
 ## 현재 검증 상태
 
-- 단위 테스트: `tests/unit` 기준 328개 통과
+- 단위 테스트: `tests/unit` 기준 333개 통과
 - API smoke: `/api/ping`, `/api/health` 기본 확인 가능
 - Health endpoint: 데이터 파일, 모듈 import, 국면 모델, universe/ETF 준비 상태 조립을 `src/kq_tool/api/health.py`로 분리
 - 공통 유틸: 외부 API 재시도/backoff helper를 `src/kq_tool/utils/retry.py`로 분리
@@ -192,6 +194,9 @@ Alpha Decay 신호 방향, 로보 점수 가중치/라벨, 로보 매수/매도 
 - API 정적파일: index.html 읽기/경로 검증 helper를 `src/kq_tool/api/static_files.py`로 분리
 - 국면 API: 매크로 국면 payload와 `/api/regime_ai` payload 조립을 `src/kq_tool/regime`로 분리
 - 국면 리포트: `/api/market_report` 조회/등록 API와 AI 시장 국면 탭의 스크롤형 보고서 목록/직접 등록 UI 추가
+- 학술 검증: Fama-French 3/5 팩터 회귀 helper를 추가해 포트폴리오 alpha와 t-stat을 표준 팩터 기준으로 검증 가능
+- 학술 검증 실행: `python tests\validation_factor_regression.py --model ff5 --top-n 500`
+- 학술 검증 입력: `tests\export_dsr_inputs.py`로 DSR/국면별 성과분해 공용 입력 3개 CSV 생성 가능
 - 실행 의존성: 새 환경에서도 LightGBM을 쓰며, `hmmlearn`은 Python 3.10~3.13에서만 설치하도록 조건부 처리
 - 차트: 일/월/년 봉과 조회 기간을 분리하고 전체 기간 확대/이동/저장 지원
 - 가격 기간: 차트/전략 기간 코드는 `src/kq_tool/data/price.py`의 공용 helper 기준으로 정리

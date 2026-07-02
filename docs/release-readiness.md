@@ -6,9 +6,10 @@
 
 - 기존 `server.py` + `index.html` 앱은 계속 실행 가능한 상태입니다.
 - 핵심 계산 로직은 `src/kq_tool` 패키지로 단계적으로 분리되어 있습니다.
-- 단위 테스트 기준: `tests/unit` 328개.
+- 단위 테스트 기준: `tests/unit` 333개.
 - 기본 회귀검증 스크립트: `RUN_REGRESSION_CHECKS.bat`.
 - 팀원 실행 스크립트: `RUN_KQ_TOOL.bat`.
+- 학술 검증 스크립트: `python tests\validation_factor_regression.py --model ff5 --top-n 500`.
 
 ## 실행 명령
 
