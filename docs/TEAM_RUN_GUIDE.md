@@ -1,4 +1,4 @@
-# 팀원 실행 안내
+﻿# 팀원 실행 안내
 
 ## 가장 쉬운 실행 방법
 
@@ -111,3 +111,22 @@ python tests\smoke_api.py --include-stock --timeout 120
 ```bat
 python tests\smoke_api.py --include-stock --include-core --timeout 180
 ```
+
+## 시황/애널리스트 리포트 수집
+
+공개 RSS나 웹페이지를 국면진단 보조 근거로 쓰려면 먼저 샘플 설정을 만듭니다.
+
+```powershell
+python collect_market_reports.py --init-sample
+```
+
+`data\report_sources.json`에서 허용된 공개 소스 URL을 넣고 `enabled`를 `true`로 바꾼 뒤 실행합니다.
+
+```powershell
+python collect_market_reports.py
+```
+
+결과는 `data\market_reports\latest.md`에 저장되고, AI 시장 국면 탭의 시장시황보고서 보조 진단에 표시됩니다.
+브라우저의 AI 시장 국면 탭에서 보유한 `.txt`/`.md` 리포트 파일을 선택하거나 본문을 붙여넣어 직접 등록할 수도 있습니다. 직접 등록한 리포트는 `data\market_reports\user_reports.md`에 누적 저장됩니다.
+유료 리포트, 로그인 페이지, 크롤링 금지 페이지는 사용하지 마세요.
+

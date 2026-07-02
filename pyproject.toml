@@ -22,6 +22,7 @@ dependencies = [
 
 [project.scripts]
 kq-tool = "kq_tool.__main__:main"
+kq-report-crawl = "kq_tool.data.report_crawler:main"
 
 [project.optional-dependencies]
 dev = [

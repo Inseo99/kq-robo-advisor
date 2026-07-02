@@ -8,6 +8,7 @@ def test_api_package_exports_current_helper_surface() -> None:
         "ApiResponse",
         "JSON_CONTENT_TYPE",
         "REQUIRED_SERVICE_KEYS",
+        "ResponseWriter",
         "StaticFilePayload",
         "StockParams",
         "StrategyBacktestParams",
@@ -34,19 +35,24 @@ def test_api_package_exports_current_helper_surface() -> None:
         "handle_dispatched_get_safely",
         "handle_legacy_get",
         "json_response_body",
+        "make_response_writer",
         "missing_service_keys",
         "no_cache_headers",
         "open_preferred_browser",
         "parse_stock_params",
         "parse_strategy_backtest_params",
         "read_static_file",
+        "run_json_service_action",
         "run_server_with_browser_policy",
+        "run_stock_action",
+        "run_strategy_backtest_action",
         "schedule_browser_open",
         "send_body_response",
         "send_empty_response",
         "send_headers",
         "send_json_action",
         "send_json_response",
+        "serve_static_file",
         "serve_until_interrupted",
         "server_ready_messages",
         "server_url",
@@ -57,6 +63,10 @@ def test_api_package_exports_current_helper_surface() -> None:
 
     assert set(api.__all__) == expected
     assert all(hasattr(api, name) for name in expected)
+
+
+
+
 
 
 

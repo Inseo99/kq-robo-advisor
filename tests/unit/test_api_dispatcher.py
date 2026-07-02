@@ -28,6 +28,7 @@ def _services():
         },
         "regime_ai": lambda: {"regime": True},
         "recommend_portfolio": lambda: {"recommend": True},
+        "market_report": lambda: {"market_report": True},
     }
 
 
@@ -80,6 +81,13 @@ def test_dispatch_strategy_backtest_accepts_quant_compare() -> None:
     }
 
 
+
+
+def test_dispatch_market_report_route() -> None:
+    response = dispatch_get("/api/market_report", _services())
+
+    assert response.kind == "json"
+    assert response.payload == {"market_report": True}
 def test_dispatch_unknown_route_returns_not_found() -> None:
     response = dispatch_get("/missing", _services())
 
@@ -201,6 +209,7 @@ def test_handle_legacy_get_routes_file_json_actions_and_not_found() -> None:
         "macro_payload": {"macro": True},
         "regime_ai": lambda: calls.append(("regime_ai", None, None)),
         "recommend_portfolio": lambda: calls.append(("recommend", None, None)),
+        "market_report": lambda: calls.append(("market_report", None, None)),
         "health": lambda: {"health": True},
     }
 
@@ -236,6 +245,7 @@ def test_handle_legacy_get_routes_zero_arg_endpoint_actions() -> None:
         "macro_payload": {},
         "regime_ai": lambda: calls.append("regime_ai"),
         "recommend_portfolio": lambda: calls.append("recommend_portfolio"),
+        "market_report": lambda: calls.append("market_report"),
         "health": lambda: {},
     }
 
@@ -243,12 +253,15 @@ def test_handle_legacy_get_routes_zero_arg_endpoint_actions() -> None:
     assert handle_legacy_get("/api/backtest", **callbacks) == "backtest"
     assert handle_legacy_get("/api/regime_ai", **callbacks) == "regime_ai"
     assert handle_legacy_get("/api/recommend_portfolio", **callbacks) == "recommend_portfolio"
-    assert calls == ["screen", "backtest", "regime_ai", "recommend_portfolio"]
-def test_server_reuses_api_response_apply_helper() -> None:
+    assert handle_legacy_get("/api/market_report", **callbacks) == "market_report"
+    assert calls == ["screen", "backtest", "regime_ai", "recommend_portfolio", "market_report"]
+def test_server_uses_safe_and_legacy_dispatch_helpers() -> None:
     import server
 
-    assert server._kq_apply_api_response is apply_api_response
-    assert server._kq_handle_dispatched_get is handle_dispatched_get
     assert server._kq_handle_dispatched_get_safely is handle_dispatched_get_safely
     assert server._kq_handle_legacy_get is handle_legacy_get
+    assert not hasattr(server, "_kq_apply_api_response")
+    assert not hasattr(server, "_kq_handle_dispatched_get")
+
+
 

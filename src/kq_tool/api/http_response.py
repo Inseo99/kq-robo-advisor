@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from .serialization import clean_json_value
 
@@ -20,6 +21,74 @@ NO_CACHE_HEADERS = (
     ("Pragma", "no-cache"),
     ("Expires", "0"),
 )
+
+@dataclass(frozen=True)
+class ResponseWriter:
+    """Bound HTTP response callbacks for a BaseHTTPRequestHandler instance."""
+
+    send_response: Callable[[int], object]
+    send_header: Callable[[str, str], object]
+    end_headers: Callable[[], object]
+    write_body: Callable[[bytes], object]
+
+    def empty(self, code: int) -> dict[str, object]:
+        """Write an empty response with shared local headers."""
+
+        return send_empty_response(
+            send_response=self.send_response,
+            send_header=self.send_header,
+            end_headers=self.end_headers,
+            code=code,
+        )
+
+    def body(self, body: bytes, content_type: str, *, code: int = 200) -> dict[str, object]:
+        """Write a non-JSON body response with shared local headers."""
+
+        return send_body_response(
+            send_response=self.send_response,
+            send_header=self.send_header,
+            end_headers=self.end_headers,
+            write_body=self.write_body,
+            body=body,
+            content_type=content_type,
+            code=code,
+        )
+
+    def json(
+        self,
+        obj: object,
+        *,
+        code: int = 200,
+        cleaner: Callable[[object], object] = clean_json_value,
+    ) -> dict[str, object]:
+        """Serialize and write a JSON response with shared local headers."""
+
+        return send_json_response(
+            obj,
+            send_response=self.send_response,
+            send_header=self.send_header,
+            end_headers=self.end_headers,
+            write_body=self.write_body,
+            code=code,
+            cleaner=cleaner,
+        )
+
+
+def make_response_writer(
+    *,
+    send_response: Callable[[int], object],
+    send_header: Callable[[str, str], object],
+    end_headers: Callable[[], object],
+    write_body: Callable[[bytes], object],
+) -> ResponseWriter:
+    """Bind BaseHTTPRequestHandler callbacks into a reusable response writer."""
+
+    return ResponseWriter(
+        send_response=send_response,
+        send_header=send_header,
+        end_headers=end_headers,
+        write_body=write_body,
+    )
 
 
 def cors_headers() -> tuple[tuple[str, str], ...]:
@@ -152,4 +221,6 @@ def send_json_action(
 
     send_json(payload, 200)
     return {"ok": True, "payload": payload}
+
+
 
