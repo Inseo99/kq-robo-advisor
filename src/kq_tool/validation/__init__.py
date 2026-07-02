@@ -1,6 +1,14 @@
 ﻿"""Validation reporting helpers."""
 
 from .costs import apply_signal_costs, net_edge_return, signal_trade_cost_rate
+from .factor_analysis import (
+    FF3_FACTORS,
+    FF5_FACTORS,
+    cross_sectional_factor_returns,
+    factor_regression_rows,
+    fama_french_regression,
+    run_factor_regressions,
+)
 from .regime_alpha_decay import (
     DEFAULT_REGIMES,
     UNKNOWN_REGIME,
@@ -21,10 +29,15 @@ from .segments import segment_split_for_top, signal_names_for_side, ticker_segme
 
 __all__ = [
     "DEFAULT_REGIMES",
+    "FF3_FACTORS",
+    "FF5_FACTORS",
     "UNKNOWN_REGIME",
     "ValidationRow",
     "apply_signal_costs",
     "best_quality_row",
+    "cross_sectional_factor_returns",
+    "factor_regression_rows",
+    "fama_french_regression",
     "format_signal_quality_markdown",
     "load_signal_quality_summary",
     "net_edge_return",
@@ -32,6 +45,7 @@ __all__ = [
     "rank_quality_rows",
     "regime_at_date",
     "regime_summary_rows",
+    "run_factor_regressions",
     "segment_split_for_top",
     "signal_trade_cost_rate",
     "signal_names_for_side",

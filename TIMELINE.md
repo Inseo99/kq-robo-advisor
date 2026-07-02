@@ -27,6 +27,15 @@ existing `server.py` app runnable while extracting tested modules into
   `quant`, `quant_s2`, and `quant_compare`.
 - Regression checks now fail if documented `tests/unit` counts drift from
   actual pytest collection.
+- Fama-French 3/5 factor-regression helpers now compute portfolio alpha,
+  alpha t-stat, factor betas, and factor-construction spreads for academic
+  validation.
+- Added `tests/validation_factor_regression.py` to build Korean FF-style
+  `MKT/SMB/HML/RMW/CMA` factors from cached data and export portfolio-level
+  alpha/t-stat results.
+- Added `tests/export_dsr_inputs.py` to export shared monthly inputs for
+  Deflated Sharpe Ratio and regime-conditional performance analysis:
+  strategy returns, raw asset returns, and PiT monthly regime labels.
 - Release artifact contract tests verify launcher/regression batch files and
   handoff docs keep pointing to the expected commands.
 - Windows launcher contract tests now lock Python discovery order, Chrome-first
