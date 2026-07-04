@@ -1,0 +1,3 @@
+﻿mode,threshold,events,edge_pct,random_pct,delta_vs_raw_pct,p_value,universe_source,signal_side,ticker_segment,segment_split,include_limit_moves,limit_threshold
+raw,,1022,0.753816553491648,0.8802182109281946,0.0,0.5,etf,all,all,1,False,0.295
+quality,0.7,801,0.7786590470717305,0.49394915918952564,0.024842493580082455,0.5,etf,all,all,1,False,0.295

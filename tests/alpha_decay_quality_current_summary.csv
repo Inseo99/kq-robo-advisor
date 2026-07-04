@@ -1,0 +1,5 @@
+﻿mode,threshold,events,edge_pct,random_pct,delta_vs_raw_pct,p_value,cost_bps,slippage_bps,trade_sides,cost_rate_pct,universe_source,signal_side,ticker_segment,segment_split,include_limit_moves,limit_threshold
+raw,,25500,1.0690895256992008,0.2553524357559424,0.0,0.0,25.0,5.0,2,0.6,equity,buy,all,50,False,0.295
+quality,0.5,11526,0.7368620043337939,-0.014786987738981862,-0.33222752136540695,0.022,25.0,5.0,2,0.6,equity,buy,all,50,False,0.295
+quality,0.6,8325,1.551139078395954,0.06985633196632142,0.48204955269675315,0.0,25.0,5.0,2,0.6,equity,buy,all,50,False,0.295
+quality,0.7,5867,1.5585321130627545,0.06937853958985506,0.4894425873635538,0.0,25.0,5.0,2,0.6,equity,buy,all,50,False,0.295
