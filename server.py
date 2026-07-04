@@ -362,6 +362,28 @@ except Exception as _backtest_mod_e:
     _kq_strategy_descriptor = None
 
 try:
+    from kq_tool.data.app_data import (
+        get_macro_snapshot as _kq_app_get_macro_snapshot,
+        get_price_frame as _kq_app_get_price_frame,
+        get_price_series as _kq_app_get_price_series,
+        get_regime_payload as _kq_app_get_regime_payload,
+        get_universe as _kq_app_get_universe,
+        latest_price_date as _kq_app_latest_price_date,
+        load_close_panel as _kq_app_load_close_panel,
+    )
+    _KQ_APP_DATA_READY = True
+except Exception as _app_data_e:
+    print(f'  [module] app data gateway import 실패 - legacy 데이터 경로 사용: {_app_data_e}')
+    _KQ_APP_DATA_READY = False
+    _kq_app_get_macro_snapshot = None
+    _kq_app_get_price_frame = None
+    _kq_app_get_price_series = None
+    _kq_app_get_regime_payload = None
+    _kq_app_get_universe = None
+    _kq_app_latest_price_date = None
+    _kq_app_load_close_panel = None
+
+try:
     from kq_tool.regime.classifier import current_regime_snapshot as _kq_current_regime_snapshot
     from kq_tool.regime.macro_builder import (
         REGIME_DEFINITION as _KQ_REGIME_DEFINITION,
@@ -417,27 +439,31 @@ except Exception as _e:
 # ── AI 시장 국면 모델 (TabPFN + HMM) ─────────────────────────────────────
 # 서버 시작 시 매크로 데이터로 자동 학습. 실패해도 서버는 계속 동작.
 REGIME_MODEL = None
+_LEGACY_REGIME_MODEL_PATH = os.path.join(BASE_DIR, 'regime_model.py')
 try:
-    if os.environ.get('KQ_ENABLE_TABPFN', '0').strip() == '1':
-        os.environ['KQ_DISABLE_TABPFN'] = '0'
+    if not os.path.exists(_LEGACY_REGIME_MODEL_PATH):
+        print('  [regime] legacy 모델 없음 - 검증된 v2 payload 모드 사용')
     else:
-        os.environ['KQ_DISABLE_TABPFN'] = '1'
-    import regime_model as _rm
-    if EXCEL_MACRO:
-        print('  [regime] 매크로 국면 모델 학습 중...')
-        REGIME_MODEL = _rm.HierarchicalRegimeModel()
-        REGIME_MODEL.fit(EXCEL_MACRO)
-        if REGIME_MODEL.trained:
-            _classifier = REGIME_MODEL.classifier.model_type or 'Rule-based'
-            _n_samples = len(REGIME_MODEL.train_data) if REGIME_MODEL.train_data is not None else 0
-            print(f'  [regime] OK 학습 완료 - 분류기: {_classifier}, 표본: {_n_samples}분기')
+        if os.environ.get('KQ_ENABLE_TABPFN', '0').strip() == '1':
+            os.environ['KQ_DISABLE_TABPFN'] = '0'
         else:
-            print('  [regime] WARN 학습 실패 (데이터 부족) - 폴백 모드')
-            REGIME_MODEL = None
-    else:
-        print('  [regime] 매크로 데이터 없음 - 모델 학습 건너뜀')
+            os.environ['KQ_DISABLE_TABPFN'] = '1'
+        import regime_model as _rm
+        if EXCEL_MACRO:
+            print('  [regime] 매크로 국면 모델 학습 중...')
+            REGIME_MODEL = _rm.HierarchicalRegimeModel()
+            REGIME_MODEL.fit(EXCEL_MACRO)
+            if REGIME_MODEL.trained:
+                _classifier = REGIME_MODEL.classifier.model_type or 'Rule-based'
+                _n_samples = len(REGIME_MODEL.train_data) if REGIME_MODEL.train_data is not None else 0
+                print(f'  [regime] OK 학습 완료 - 분류기: {_classifier}, 표본: {_n_samples}분기')
+            else:
+                print('  [regime] WARN 학습 실패 (데이터 부족) - 폴백 모드')
+                REGIME_MODEL = None
+        else:
+            print('  [regime] 매크로 데이터 없음 - 모델 학습 건너뜀')
 except Exception as _e:
-    print(f'  [regime] 모델 로드 실패 (서버는 계속 동작): {_e}')
+    print(f'  [regime] legacy 모델 로드 실패 - v2 payload 모드 사용: {_e}')
     REGIME_MODEL = None
 
 # ── 종목 유니버스 ─────────────────────────────────────────────────────────
@@ -745,6 +771,16 @@ def _dl(ticker, period='1y'):
     """주가 OHLCV 조회 — 엑셀 데이터 우선, ETF·KOSPI는 yfinance
     실제 종가(raw)를 사용하여 현재가·차트가 일치하도록 함.
     """
+    # 0) 검증 파이프라인 수정주가 패널 우선 (차트/분석/스크리너 공통)
+    if _KQ_APP_DATA_READY and _kq_app_get_price_frame is not None:
+        try:
+            app_df = _kq_app_get_price_frame(ticker, period)
+            min_rows = 1 if period == '1d' else 20
+            if app_df is not None and len(app_df) >= min_rows:
+                return app_df, False
+        except Exception:
+            pass
+
     # 1) 엑셀 주가 데이터 우선 (개별 종목)
     if EXCEL_DATA and ticker in UNIVERSE:
         code = _ticker_to_code(ticker)
@@ -1438,22 +1474,35 @@ def _fetch_one(ticker):
 def _run_screener():
     results = {}
     price_date = None
-    try:
-        _dl_mod._load_price_parquet('price_종가.parquet')
-        close_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
-        close_groups = _dl_mod._PRICE_GROUPS.get(close_path, {})
-        if _kq_latest_price_date_from_groups is not None:
-            price_date = _kq_latest_price_date_from_groups(close_groups)
-        else:
-            last_dates = [s.dropna().index[-1] for s in close_groups.values()
-                          if s is not None and len(s.dropna()) > 0]
-            if last_dates:
-                price_date = max(last_dates).strftime('%Y-%m-%d')
-    except Exception:
-        price_date = None
+    if _KQ_APP_DATA_READY and _kq_app_latest_price_date is not None:
+        try:
+            price_date = _kq_app_latest_price_date()
+        except Exception:
+            price_date = None
+    if price_date is None:
+        try:
+            _dl_mod._load_price_parquet('price_종가.parquet')
+            close_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
+            close_groups = _dl_mod._PRICE_GROUPS.get(close_path, {})
+            if _kq_latest_price_date_from_groups is not None:
+                price_date = _kq_latest_price_date_from_groups(close_groups)
+            else:
+                last_dates = [s.dropna().index[-1] for s in close_groups.values()
+                              if s is not None and len(s.dropna()) > 0]
+                if last_dates:
+                    price_date = max(last_dates).strftime('%Y-%m-%d')
+        except Exception:
+            price_date = None
 
     # 시가총액 상위 종목 사용 (스크리너 + 백테스트 일관성)
     candidates = get_top_marketcap_tickers()
+    if _KQ_APP_DATA_READY and _kq_app_get_universe is not None:
+        try:
+            active_codes = set(_kq_app_get_universe())
+            if active_codes:
+                candidates = [t for t in candidates if _ticker_to_code(t) in active_codes]
+        except Exception as e:
+            print(f'  [screener] app_data 활성 유니버스 필터 실패: {e}')
     if len(candidates) < len(UNIVERSE):
         print(f'  [screener] 시가총액 상위 {len(candidates)}개로 제한')
 
@@ -1716,6 +1765,26 @@ _REGIME_DEF = {
 
 def _build_macro():
     """엑셀 매크로 데이터에서 현재 지표 + 국면 추정"""
+    if _KQ_APP_DATA_READY and _kq_app_get_macro_snapshot is not None:
+        try:
+            snap = _kq_app_get_macro_snapshot()
+            current = '리플레이션'
+            try:
+                if _kq_app_get_regime_payload is not None:
+                    current = _kq_app_get_regime_payload().get('current_regime') or current
+            except Exception:
+                pass
+            return dict(
+                regimes=_REGIME_DEF,
+                indicators=snap.get('indicators', {}),
+                current=current,
+                current_hint=snap.get('current_hint') or 'data/macro CSV 최신값 기준',
+                current_features=snap.get('current_features', {}),
+                macro_asof=snap.get('asof'),
+            )
+        except Exception as e:
+            print(f'  [macro] app_data 매크로 로드 실패 - legacy 매크로 사용: {e}')
+
     if _kq_build_macro_payload is not None:
         return _kq_build_macro_payload(
             EXCEL_MACRO,
@@ -1891,26 +1960,36 @@ def _run_strategy_backtest(strategy, top_n, rebalance, period, transaction_cost_
         else period in ('12y', '15y', '20y', 'max', None) or period not in ('1y', '2y', '3y', '5y', '7y')
     )
 
-    # data_loader의 종가 그룹 직접 사용 (한 번만 로딩)
-    _dl_mod._load_price_parquet('price_종가.parquet')
-    close_groups_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
-    close_groups = _dl_mod._PRICE_GROUPS.get(close_groups_path, {})
-
-    if not close_groups:
-        return {'error': '종가 데이터 로드 실패'}
-
-    # UNIVERSE에서 시가총액 상위 200개만 사용 (스크리너와 일관성, 학술 표준)
-    # - 유동성 확보 (실전 거래 가능 종목)
-    # - 생존편향 완화 (소형주 상폐 위험 회피)
-    # - Fama-French, AQR 등 학술 연구의 표준 방법론
+    # 검증 파이프라인의 수정주가 패널 우선 사용 (차트/스크리너와 같은 세계)
     top_tickers = set(UNIVERSE.keys())
     mcap_history = get_mcap_history()
     px = {}
-    for t in top_tickers:
-        code = _ticker_to_code(t)
-        s = close_groups.get(code)
-        if s is not None and len(s) >= 20:
-            px[t] = s
+    if _KQ_APP_DATA_READY and _kq_app_load_close_panel is not None:
+        try:
+            close_panel = _kq_app_load_close_panel()
+            active_codes = set(_kq_app_get_universe()) if _kq_app_get_universe is not None else set(close_panel.columns)
+            for t in top_tickers:
+                code = _ticker_to_code(t)
+                if code in active_codes and code in close_panel.columns:
+                    s = pd.to_numeric(close_panel[code], errors='coerce').dropna()
+                    if len(s) >= 20:
+                        px[t] = s
+        except Exception as e:
+            print(f'  [stratbt] app_data 수정주가 패널 로드 실패 - legacy parquet 사용: {e}')
+            px = {}
+
+    if not px:
+        # data_loader의 종가 그룹 직접 사용 (legacy fallback)
+        _dl_mod._load_price_parquet('price_종가.parquet')
+        close_groups_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
+        close_groups = _dl_mod._PRICE_GROUPS.get(close_groups_path, {})
+        if not close_groups:
+            return {'error': '종가 데이터 로드 실패'}
+        for t in top_tickers:
+            code = _ticker_to_code(t)
+            s = close_groups.get(code)
+            if s is not None and len(s) >= 20:
+                px[t] = s
 
     if not px:
         return {'error': 'UNIVERSE와 데이터 매칭 실패'}
@@ -1932,12 +2011,20 @@ def _run_strategy_backtest(strategy, top_n, rebalance, period, transaction_cost_
 
     # 2) 월말 리밸런싱 날짜
     price_df = pd.DataFrame(px)
+    evaluation_start = BACKTEST_START
+    if not use_fixed_start:
+        days = _period_days(period, 1095)
+        evaluation_start = price_df.index[-1] - pd.Timedelta(days=days)
+    s2_keys = {'quant_s2', 's2_momentum'}
+    short_lookback_keys = {'quant', 'robo'}
+    warmup_days = 365 if strategy in s2_keys else (120 if strategy in short_lookback_keys else 0)
     if _kq_prepare_strategy_price_frame is not None:
         price_df, prep_error = _kq_prepare_strategy_price_frame(
             price_df,
             period,
             period_days_fn=_period_days,
             backtest_start=BACKTEST_START,
+            warmup_days=warmup_days,
         )
         if prep_error:
             return {'error': prep_error}
@@ -2035,6 +2122,7 @@ def _run_strategy_backtest(strategy, top_n, rebalance, period, transaction_cost_
             universe_names={ticker: meta[0] for ticker, meta in UNIVERSE.items()},
             transaction_cost_bps=transaction_cost_bps,
             slippage_bps=slippage_bps,
+            evaluation_start=evaluation_start,
         )
 
     # 3) 매 리밸런싱 시점마다 종목 선정 → 다음 기간 수익률
@@ -2451,8 +2539,8 @@ def _portfolio_validity(snapshot):
         regime_duration_quarters=round(duration_q, 2) if duration_q else None,
         confidence=round(confidence * 100, 1),
         next_same_regime_prob=round(stay_prob * 100, 1) if stay_prob is not None else None,
-        review_rule='국면 확률 60% 이하 또는 다음 분기 전환확률 40% 이상이면 조기 재평가',
-        rebalance='월간 점검 / 분기 리밸런싱 기본',
+        review_rule='조기재평가는 점검 사유 / 거래 기준: 밴드 이탈 또는 공식 국면전환',
+        rebalance='월간 점검 / 밴드·국면전환 트리거 거래',
     )
 
 
@@ -3075,6 +3163,10 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
+
 
 
 

@@ -144,10 +144,14 @@ def prepare_bt_data(universe_dict, ticker_to_code_fn,
     elif not use_top_mcap:
         print(f"  전체 유니버스 사용 ({len(target_universe)}개)")
 
-    # 1) 종가 parquet 로딩
-    _dl_mod._load_price_parquet('price_종가.parquet')
-    close_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
-    close_groups = _dl_mod._PRICE_GROUPS.get(close_path, {})
+    # 1) 수정주가 패널 로딩 (검증 관문 통과본) — 구 parquet 캐시 대체
+    src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+    from kq_tool.data.app_data import load_close_panel
+
+    _panel = load_close_panel()
+    close_groups = {code: _panel[code].dropna() for code in _panel.columns}
 
     if not close_groups:
         raise RuntimeError('종가 데이터 로드 실패')
@@ -464,4 +468,5 @@ if __name__ == '__main__':
     print(f"  5회 평균: {np.mean(cagrs):.2f}%, 소요: {time.time()-t0:.1f}초")
 
     print(f"\n✅ Task 1 완료")
+
 

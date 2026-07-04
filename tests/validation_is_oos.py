@@ -15,6 +15,12 @@ validation_is_oos.py — In-Sample vs Out-of-Sample 분리 검증
 
 import os, sys, time
 os.environ.setdefault('KQ_DISABLE_TABPFN', '1')
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 import numpy as np
 import pandas as pd
 

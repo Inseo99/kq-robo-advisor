@@ -55,6 +55,39 @@ python server.py
 http://127.0.0.1:8888/
 ```
 
+
+
+## 가격 데이터 무결성
+
+전략검증/스크리너/모멘텀 검증 전에 수정주가 패널을 준비하고 가격 무결성을 확인합니다.
+
+```powershell
+# 간단 테스트: 종목을 직접 지정
+python scripts\fetch_prices.py --tickers 005930 000660 035420 --start 2014-01-01
+
+# 파일 입력: tickers.txt를 먼저 만든 뒤 실행
+python -c "import FinanceDataReader as fdr; df = fdr.StockListing('KOSPI'); df.nlargest(200, 'Marcap')['Code'].to_csv('tickers.txt', index=False, header=False)"
+Add-Content tickers.txt "069500","148070","114260","153130","132030","130680","229200"
+python scripts\fetch_prices.py --tickers-file tickers.txt --start 2014-01-01
+
+python tests\validation_price_integrity.py
+```
+
+`data/prices/close.csv`는 생성 산출물이므로 git에는 포함하지 않습니다.
+## ECOS 매크로 데이터 수집
+
+실제 국면 라벨/모델 검증에는 `data/macro/*.csv` 원자료가 필요합니다. 수집 절차는 [docs/ecos_data_guide.md](docs/ecos_data_guide.md)를 기준으로 합니다.
+
+```powershell
+$env:ECOS_API_KEY = "발급받은_API_KEY"
+python scripts\fetch_ecos.py --discover 817Y002
+python scripts\fetch_ecos.py
+python tests\validation_macro_pit.py
+python tests\validation_price_integrity.py
+python scripts\make_labels.py
+# 복합 성장축 데이터(exports_yoy, industrial_production, leading_index_cycle)가 준비된 뒤
+python scripts\make_labels.py --growth-mode composite
+```
 ## 시황/애널리스트 리포트 수집
 
 AI 시장 국면 탭은 `data/market_reports/latest.md`와 `data/market_reports/user_reports.md`를 읽어 정량 국면의 보조 근거로 사용합니다.
@@ -108,6 +141,15 @@ python tests\smoke_api.py
 python tests\validation_signal_quality_alpha_decay.py --universe-source etf --top 3 --n 1 --min-quality 0.7 --cost-bps 10 --slippage-bps 5 --output tests\signal_quality_cost_smoke.npz
 python tests\validation_regime_alpha_decay.py --top 50 --n 200 --mode quality --min-quality 0.6 --signal-side buy
 python tests\export_dsr_inputs.py --start 2014-06-26
+python tests\validation_dsr_regime.py
+python tests\run_dsr_regime_analysis.py --data-dir tests --n-trials 15 --benchmark KOSPI
+python tests\validation_macro_pit.py
+python tests\validation_price_integrity.py
+python scripts\make_labels.py
+python tests\validation_regime_labels.py
+python tests\validation_regime_model.py
+python tests\validation_regime_shuffle.py --data-dir tests --n 500
+python tests\validation_regime_shuffle_v2.py --n 500
 ```
 
 ## 현재 구조
@@ -158,6 +200,10 @@ src/kq_tool/
   regime/
     classifier.py
     macro_builder.py
+    macro_data.py
+    market_report.py
+    regime_labels.py
+    regime_model_v2.py
     response.py
   screener/
     engine.py
@@ -194,12 +240,20 @@ Alpha Decay 신호 방향, 로보 점수 가중치/라벨, 로보 매수/매도 
 - API 정적파일: index.html 읽기/경로 검증 helper를 `src/kq_tool/api/static_files.py`로 분리
 - 국면 API: 매크로 국면 payload와 `/api/regime_ai` payload 조립을 `src/kq_tool/regime`로 분리
 - 국면 리포트: `/api/market_report` 조회/등록 API와 AI 시장 국면 탭의 스크롤형 보고서 목록/직접 등록 UI 추가
+- 국면 PiT: `src/kq_tool/regime/macro_data.py`와 `docs/macro_publication_lags.md`로 매크로 발표지연 lag를 등록하고 `tests\validation_macro_pit.py`로 문서/코드 정합성과 look-ahead 방지를 검증
+- 국면 라벨: `src/kq_tool/regime/regime_labels.py`로 GDP rolling median 단일축과 GDP/수출/산업생산/선행지수 복합 성장축 옵션을 지원하고 `tests\validation_regime_labels.py`로 히스테리시스와 라벨 누수를 검증
+- 국면 모델 v2: `src/kq_tool/regime/regime_model_v2.py`로 라벨 축과 피처 축을 분리하고 purged walk-forward 확률을 `tests\validation_regime_model.py`로 검증
+- 국면 셔플: `tests\validation_regime_shuffle.py`로 실제 국면 기반 walk-forward 전략 선택기가 셔플된 가짜 국면과 정적 60/40을 이기는지 검증
+- 국면 셔플 v2: `tests\validation_regime_shuffle_v2.py`로 고정 국면 매핑(Tier 1)과 전략 선택기(Tier 2)를 분리해 검증
+- 라벨 생성: `scripts/make_labels.py`로 `data/macro/*.csv`에서 PiT 국면 라벨을 만들고 `data/macro/regime_labels.csv`와 KOSPI 색칠 차트를 저장
 - 학술 검증: Fama-French 3/5 팩터 회귀 helper를 추가해 포트폴리오 alpha와 t-stat을 표준 팩터 기준으로 검증 가능
 - 학술 검증 실행: `python tests\validation_factor_regression.py --model ff5 --top-n 500`
 - 학술 검증 입력: `tests\export_dsr_inputs.py`로 DSR/국면별 성과분해 공용 입력 3개 CSV 생성 가능
+- 학술 검증 실행: Deflated Sharpe Ratio와 국면별 성과분해는 `python tests\run_dsr_regime_analysis.py --data-dir tests --n-trials 15 --benchmark KOSPI`로 생성
 - 실행 의존성: 새 환경에서도 LightGBM을 쓰며, `hmmlearn`은 Python 3.10~3.13에서만 설치하도록 조건부 처리
 - 차트: 일/월/년 봉과 조회 기간을 분리하고 전체 기간 확대/이동/저장 지원
 - 가격 기간: 차트/전략 기간 코드는 `src/kq_tool/data/price.py`의 공용 helper 기준으로 정리
+- 가격 데이터: `src/kq_tool/data/price_data.py`로 액면분할/병합류 미수정 점프와 상폐 의심 stale series를 감사하고 `tests\validation_price_integrity.py`로 검증
 - 가격 데이터: yfinance 실시간 현재가 필드 선택 정책을 `src/kq_tool/data/price.py` helper로 분리
 - 가격 데이터: Yahoo Finance 세션 워밍업/이력 유효성 판단을 `src/kq_tool/data/price.py` helper로 분리
 - 가격 데이터: 기간별 최소 가격행 수 판단을 `src/kq_tool/data/price.py` helper로 분리
@@ -233,6 +287,12 @@ Alpha Decay는 특히 매수형 기술 신호의 유효기간/재점검 기간�
 
 - [docs/operating-thresholds-after-costs.md](docs/operating-thresholds-after-costs.md)
 - [docs/signal_quality_segmentation.md](docs/signal_quality_segmentation.md)
+
+
+
+
+
+
 
 
 
