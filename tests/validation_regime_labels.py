@@ -67,7 +67,18 @@ def synthetic_panel(n_months: int = 240, seed: int = 7) -> pd.DataFrame:
     gdp[~gdp.index.month.isin([3, 6, 9, 12])] = np.nan
     gdp = gdp.ffill()
 
-    return pd.DataFrame({"gdp_qoq": gdp, "cpi_yoy": pd.Series(cpi_level, index=idx)})
+    exports = pd.Series(growth + rng.normal(0, 0.2, n_months), index=idx)
+    production = pd.Series(0.8 * growth + rng.normal(0, 0.25, n_months), index=idx)
+    leading = pd.Series(0.6 * growth + rng.normal(0, 0.2, n_months), index=idx)
+    return pd.DataFrame(
+        {
+            "gdp_qoq": gdp,
+            "exports_yoy": exports,
+            "industrial_production": production,
+            "leading_index_cycle": leading,
+            "cpi_yoy": pd.Series(cpi_level, index=idx),
+        }
+    )
 
 
 def test_make_regime_labels_api(panel: pd.DataFrame, cfg: LabelConfig) -> None:
@@ -76,9 +87,11 @@ def test_make_regime_labels_api(panel: pd.DataFrame, cfg: LabelConfig) -> None:
     check("L0a: make_regime_labels returns monthly Series", isinstance(labels, pd.Series))
     check("L0b: return_frame includes candidate/regime diagnostics", {"candidate", "regime"} <= set(detail.columns))
     check("L0c: produced at least two regimes on synthetic data", labels.dropna().nunique() >= 2)
+    composite = make_regime_labels(cfg=LabelConfig(use_growth_composite=True), panel=panel)
+    check("L0d: composite growth labels run on synthetic data", composite.dropna().nunique() >= 2)
 
 
-def test_expanding_integrity(panel: pd.DataFrame, cfg: LabelConfig) -> None:
+def test_rolling_integrity(panel: pd.DataFrame, cfg: LabelConfig) -> None:
     full = make_regime_labels(cfg=cfg, panel=panel)
 
     ok = True
@@ -90,7 +103,7 @@ def test_expanding_integrity(panel: pd.DataFrame, cfg: LabelConfig) -> None:
             ok = False
             detail = f"asof={asof} partial labels differ from full-prefix labels"
             break
-    check("L1: expanding thresholds are vintage-invariant", ok, detail)
+    check("L1: rolling thresholds are vintage-invariant", ok, detail)
 
     def leaky_labels(frame: pd.DataFrame) -> pd.Series:
         growth = frame["gdp_qoq"]
@@ -184,7 +197,7 @@ def main() -> int:
     panel = synthetic_panel()
 
     test_make_regime_labels_api(panel, cfg)
-    test_expanding_integrity(panel, cfg)
+    test_rolling_integrity(panel, cfg)
     test_hysteresis(panel, cfg)
     test_warmup(panel, cfg)
     test_transition_matrix(panel, cfg)
@@ -212,3 +225,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -62,7 +62,14 @@ http://127.0.0.1:8888/
 전략검증/스크리너/모멘텀 검증 전에 수정주가 패널을 준비하고 가격 무결성을 확인합니다.
 
 ```powershell
-python scripts\fetch_prices.py --tickers 005930 000660 035420
+# 간단 테스트: 종목을 직접 지정
+python scripts\fetch_prices.py --tickers 005930 000660 035420 --start 2014-01-01
+
+# 파일 입력: tickers.txt를 먼저 만든 뒤 실행
+python -c "import FinanceDataReader as fdr; df = fdr.StockListing('KOSPI'); df.nlargest(200, 'Marcap')['Code'].to_csv('tickers.txt', index=False, header=False)"
+Add-Content tickers.txt "069500","148070","114260","153130","132030","130680","229200"
+python scripts\fetch_prices.py --tickers-file tickers.txt --start 2014-01-01
+
 python tests\validation_price_integrity.py
 ```
 
@@ -78,6 +85,8 @@ python scripts\fetch_ecos.py
 python tests\validation_macro_pit.py
 python tests\validation_price_integrity.py
 python scripts\make_labels.py
+# 복합 성장축 데이터(exports_yoy, industrial_production, leading_index_cycle)가 준비된 뒤
+python scripts\make_labels.py --growth-mode composite
 ```
 ## 시황/애널리스트 리포트 수집
 
@@ -232,7 +241,7 @@ Alpha Decay 신호 방향, 로보 점수 가중치/라벨, 로보 매수/매도 
 - 국면 API: 매크로 국면 payload와 `/api/regime_ai` payload 조립을 `src/kq_tool/regime`로 분리
 - 국면 리포트: `/api/market_report` 조회/등록 API와 AI 시장 국면 탭의 스크롤형 보고서 목록/직접 등록 UI 추가
 - 국면 PiT: `src/kq_tool/regime/macro_data.py`와 `docs/macro_publication_lags.md`로 매크로 발표지연 lag를 등록하고 `tests\validation_macro_pit.py`로 문서/코드 정합성과 look-ahead 방지를 검증
-- 국면 라벨: `src/kq_tool/regime/regime_labels.py`로 GDP expanding median + CPI YoY momentum 기반 PiT 안전 4국면 라벨을 만들고 `tests\validation_regime_labels.py`로 히스테리시스와 라벨 누수를 검증
+- 국면 라벨: `src/kq_tool/regime/regime_labels.py`로 GDP rolling median 단일축과 GDP/수출/산업생산/선행지수 복합 성장축 옵션을 지원하고 `tests\validation_regime_labels.py`로 히스테리시스와 라벨 누수를 검증
 - 국면 모델 v2: `src/kq_tool/regime/regime_model_v2.py`로 라벨 축과 피처 축을 분리하고 purged walk-forward 확률을 `tests\validation_regime_model.py`로 검증
 - 국면 셔플: `tests\validation_regime_shuffle.py`로 실제 국면 기반 walk-forward 전략 선택기가 셔플된 가짜 국면과 정적 60/40을 이기는지 검증
 - 국면 셔플 v2: `tests\validation_regime_shuffle_v2.py`로 고정 국면 매핑(Tier 1)과 전략 선택기(Tier 2)를 분리해 검증

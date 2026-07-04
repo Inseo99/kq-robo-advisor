@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from kq_tool.regime.macro_data import get_observable_panel  # noqa: E402
 from kq_tool.regime.regime_labels import (  # noqa: E402
+    DEFAULT_GROWTH_COMPONENT_KEYS,
     REGIMES,
     LabelConfig,
     make_regime_labels,
@@ -120,7 +121,8 @@ def print_diagnostics(labels: pd.Series, cfg: LabelConfig) -> None:
     print("=" * 64)
     print(
         f"Regime label diagnostics "
-        f"(confirm={cfg.confirm_months}, momentum={cfg.momentum_window}, warmup={cfg.warmup_months})"
+        f"(growth={'composite' if cfg.use_growth_composite else 'single'}, "
+        f"confirm={cfg.confirm_months}, momentum={cfg.momentum_window}, warmup={cfg.warmup_months})"
     )
     print("=" * 64)
     print(f"  period              : {clean.index[0]:%Y-%m} ~ {clean.index[-1]:%Y-%m} ({diagnostics['n_months']} months)")
@@ -170,6 +172,7 @@ def main() -> int:
     parser.add_argument("--confirm", type=int, default=3)
     parser.add_argument("--momentum", type=int, default=6)
     parser.add_argument("--warmup", type=int, default=24)
+    parser.add_argument("--growth-mode", choices=["single", "composite"], default="single")
     parser.add_argument("--chart-only", action="store_true")
     args = parser.parse_args()
 
@@ -177,6 +180,7 @@ def main() -> int:
         confirm_months=args.confirm,
         momentum_window=args.momentum,
         warmup_months=args.warmup,
+        use_growth_composite=args.growth_mode == "composite",
     )
 
     try:
@@ -184,6 +188,8 @@ def main() -> int:
     except FileNotFoundError as exc:
         print(f"[stop] macro data missing: {exc}")
         print("       Run scripts/fetch_ecos.py first, then tests/validation_macro_pit.py.")
+        if cfg.use_growth_composite:
+            print("       Composite growth mode needs: " + ", ".join(DEFAULT_GROWTH_COMPONENT_KEYS))
         return 1
 
     try:

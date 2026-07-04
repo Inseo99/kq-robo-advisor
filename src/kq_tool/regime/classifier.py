@@ -1,15 +1,47 @@
-"""Regime snapshot helpers."""
+﻿"""Regime snapshot helpers."""
 
 from __future__ import annotations
 
 from typing import Any
+
+from .ui_payload import build_payload
+
+
+def _snapshot_from_ui_payload() -> dict:
+    ui = build_payload()
+    current = ui["current_regime"]
+    diagnostics = ui.get("diagnostics") or {}
+    return {
+        "current": current,
+        "current_regime": current,
+        "confidence": float((ui.get("nowcast_probs") or {}).get(current, 0.0)),
+        "probs": ui["nowcast_probs"],
+        "next_quarter": ui["next_quarter_probs"],
+        "duration_avg": diagnostics.get("avg_duration_by_regime_q", {}),
+        "model_type": ui["method_label"],
+        "method_label": ui["method_label"],
+        "expected_remaining_days": ui["expected_remaining_days"],
+        "validity_display": ui["validity_display"],
+        "reeval_flag": ui["reeval_flag"],
+        "reeval_reasons": ui["reeval_reasons"],
+        "stay_prob_next_quarter": ui["stay_prob_next_quarter"],
+    }
 
 
 def current_regime_snapshot(
     regime_model: Any,
     fallback_current: str = "리플레이션",
 ) -> dict:
-    """Normalize current-regime model output for portfolio recommendation."""
+    """Normalize current-regime output for portfolio recommendation.
+
+    Prefer the validated v2 CSV payload so recommendation validity, regime
+    probabilities, and UI displays all share one source of truth.
+    """
+
+    try:
+        return _snapshot_from_ui_payload()
+    except Exception:
+        pass
 
     try:
         if regime_model is not None and getattr(regime_model, "trained", False):

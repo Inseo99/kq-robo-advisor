@@ -5,7 +5,7 @@ This module builds official 4-quadrant macro regime labels on top of
 rule labels:
 
 1. Inflation axis: use CPI YoY momentum instead of yield-curve spread.
-2. Growth threshold: use an expanding median instead of a full-sample median.
+2. Growth threshold: use a trailing rolling median instead of a full-sample median.
 3. Hysteresis: require a new quadrant to persist before confirming a switch.
 
 The output is intended to become the target label for the forecasting model.
@@ -23,12 +23,17 @@ import pandas as pd
 from .macro_data import get_observable_panel
 
 __all__ = [
+    "DEFAULT_GROWTH_COMPONENT_KEYS",
     "LABEL_AXIS_KEYS",
     "MODEL_FEATURE_EXCLUDE_KEYS",
     "REGIMES",
     "REGIME_TO_INT",
     "LabelConfig",
     "apply_confirmation",
+    "growth_axis",
+    "growth_composite",
+    "growth_input_keys",
+    "label_input_keys",
     "make_candidate_labels",
     "make_regime_labels",
     "next_quarter_transition_probs",
@@ -39,7 +44,13 @@ __all__ = [
 REGIMES = ["골디락스", "리플레이션", "스태그플레이션", "디플레이션"]
 REGIME_TO_INT = {regime: i for i, regime in enumerate(REGIMES)}
 
-LABEL_AXIS_KEYS = ("gdp_qoq", "cpi_yoy")
+DEFAULT_GROWTH_COMPONENT_KEYS = (
+    "gdp_qoq",
+    "exports_yoy",
+    "industrial_production",
+    "leading_index_cycle",
+)
+LABEL_AXIS_KEYS = DEFAULT_GROWTH_COMPONENT_KEYS + ("cpi_yoy",)
 MODEL_FEATURE_EXCLUDE_KEYS = frozenset(LABEL_AXIS_KEYS)
 
 
@@ -53,12 +64,69 @@ class LabelConfig:
     """
 
     growth_key: str = "gdp_qoq"
+    growth_component_keys: tuple[str, ...] = DEFAULT_GROWTH_COMPONENT_KEYS
+    use_growth_composite: bool = False
     inflation_key: str = "cpi_yoy"
     warmup_months: int = 24
+    growth_ref_window_m: int = 120
     momentum_window: int = 6
     confirm_months: int = 3
     laplace_alpha: float = 1.0
 
+
+
+def growth_input_keys(cfg: LabelConfig = LabelConfig()) -> list[str]:
+    """Return growth-axis raw input keys for the selected label mode."""
+
+    if cfg.use_growth_composite:
+        return list(cfg.growth_component_keys)
+    return [cfg.growth_key]
+
+
+def label_input_keys(cfg: LabelConfig = LabelConfig()) -> list[str]:
+    """Return all macro keys required to build labels, preserving order."""
+
+    return list(dict.fromkeys([*growth_input_keys(cfg), cfg.inflation_key]))
+
+
+def growth_composite(panel: pd.DataFrame, cfg: LabelConfig = LabelConfig()) -> pd.Series:
+    """Build a PiT-safe growth composite from trailing rolling z-scores.
+
+    Each component is standardized using only the trailing window available at
+    that month. Full-sample mean/std are never used, so vintage-invariance tests
+    remain meaningful. Missing component observations are ignored in the monthly
+    average, but missing columns are treated as configuration errors.
+    """
+
+    missing = [key for key in cfg.growth_component_keys if key not in panel]
+    if missing:
+        raise KeyError(f"Missing growth composite inputs: {missing}")
+
+    zscores: list[pd.Series] = []
+    for key in cfg.growth_component_keys:
+        series = pd.to_numeric(panel[key], errors="coerce")
+        mean = series.rolling(cfg.growth_ref_window_m, min_periods=cfg.warmup_months).mean()
+        std = series.rolling(cfg.growth_ref_window_m, min_periods=cfg.warmup_months).std()
+        z = (series - mean) / std.replace(0, np.nan)
+        zscores.append(z.rename(key))
+
+    composite = pd.concat(zscores, axis=1).mean(axis=1, skipna=True)
+    composite.name = "growth_composite"
+    return composite
+
+
+def growth_axis(panel: pd.DataFrame, cfg: LabelConfig = LabelConfig()) -> tuple[pd.Series, pd.Series]:
+    """Return growth score and threshold for the selected label mode."""
+
+    if cfg.use_growth_composite:
+        score = growth_composite(panel, cfg)
+        threshold = pd.Series(0.0, index=panel.index, name="growth_ref")
+        return score, threshold
+
+    score = pd.to_numeric(panel[cfg.growth_key], errors="coerce").rename("growth_score")
+    threshold = score.rolling(cfg.growth_ref_window_m, min_periods=cfg.warmup_months).median()
+    threshold.name = "growth_ref"
+    return score, threshold
 
 def make_candidate_labels(
     panel: pd.DataFrame,
@@ -66,25 +134,24 @@ def make_candidate_labels(
 ) -> pd.Series:
     """Return raw monthly quadrant labels before hysteresis.
 
-    Growth is high when observable GDP growth is above its expanding median.
+    Growth is high when the selected growth score is above its PiT threshold.
     Inflation is rising when CPI YoY has positive ``momentum_window``-month
     momentum. No full-sample statistic is used.
     """
 
-    missing = [key for key in (cfg.growth_key, cfg.inflation_key) if key not in panel]
+    missing = [key for key in label_input_keys(cfg) if key not in panel]
     if missing:
         raise KeyError(f"Missing label inputs: {missing}")
 
-    growth = pd.to_numeric(panel[cfg.growth_key], errors="coerce")
+    growth_score, growth_ref = growth_axis(panel, cfg)
     inflation = pd.to_numeric(panel[cfg.inflation_key], errors="coerce")
 
-    growth_ref = growth.expanding(min_periods=cfg.warmup_months).median()
-    growth_up = growth > growth_ref
+    growth_up = growth_score > growth_ref
 
     inflation_momentum = inflation.diff(cfg.momentum_window)
     inflation_up = inflation_momentum > 0
 
-    valid = growth.notna() & growth_ref.notna() & inflation_momentum.notna()
+    valid = growth_score.notna() & growth_ref.notna() & inflation_momentum.notna()
 
     labels = pd.Series(pd.NA, index=panel.index, dtype="object", name="candidate")
     labels[valid & growth_up & ~inflation_up] = "골디락스"
@@ -146,7 +213,7 @@ def make_regime_labels(
     """
 
     if panel is None:
-        panel = get_observable_panel([cfg.growth_key, cfg.inflation_key], asof=asof)
+        panel = get_observable_panel(label_input_keys(cfg), asof=asof)
     elif asof is not None:
         cutoff = pd.Timestamp(asof).to_period("M").to_timestamp("M")
         panel = panel.loc[:cutoff]
@@ -157,10 +224,10 @@ def make_regime_labels(
     if not return_frame:
         return official
 
-    out = panel[[cfg.growth_key, cfg.inflation_key]].copy()
-    out["growth_ref"] = pd.to_numeric(panel[cfg.growth_key], errors="coerce").expanding(
-        min_periods=cfg.warmup_months
-    ).median()
+    growth_score, growth_ref = growth_axis(panel, cfg)
+    out = panel[label_input_keys(cfg)].copy()
+    out["growth_score"] = growth_score
+    out["growth_ref"] = growth_ref
     out["inflation_momentum"] = pd.to_numeric(
         panel[cfg.inflation_key], errors="coerce"
     ).diff(cfg.momentum_window)
@@ -227,4 +294,5 @@ def next_quarter_transition_probs(
     probs, _ = transition_matrix(labels, alpha=alpha)
     p3 = np.linalg.matrix_power(probs.to_numpy(dtype=float), 3)
     return pd.DataFrame(p3, index=REGIMES, columns=REGIMES)
+
 

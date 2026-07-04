@@ -35,6 +35,21 @@ def normalize_ticker(ticker: str, source: str) -> str:
     return text
 
 
+
+def missing_ticker_file_message(path: Path) -> str:
+    return (
+        f"Ticker file not found: {path}\n"
+        "Create it first, for example:\n"
+        "  python -c \"import FinanceDataReader as fdr; "
+        "df = fdr.StockListing('KOSPI'); "
+        "df.nlargest(200, 'Marcap')['Code'].to_csv('tickers.txt', index=False, header=False)\"\n"
+        "  Add-Content tickers.txt \"069500\",\"148070\",\"114260\",\"153130\",\"132030\",\"130680\",\"229200\"\n"
+        "Then run:\n"
+        "  python scripts\\fetch_prices.py --tickers-file tickers.txt --start 2014-01-01\n"
+        "Or pass tickers directly:\n"
+        "  python scripts\\fetch_prices.py --tickers 005930 000660 035420 --start 2014-01-01"
+    )
+
 def read_tickers(args: argparse.Namespace) -> list[str]:
     tickers: list[str] = []
     if args.tickers:
@@ -42,7 +57,7 @@ def read_tickers(args: argparse.Namespace) -> list[str]:
     if args.tickers_file:
         path = Path(args.tickers_file)
         if not path.exists():
-            raise FileNotFoundError(path)
+            raise FileNotFoundError(missing_ticker_file_message(path))
         for line in path.read_text(encoding="utf-8").splitlines():
             clean = line.strip()
             if clean and not clean.startswith("#"):
@@ -99,9 +114,15 @@ def main() -> int:
     parser.add_argument("--end", default=None)
     args = parser.parse_args()
 
-    tickers = read_tickers(args)
+    try:
+        tickers = read_tickers(args)
+    except FileNotFoundError as exc:
+        print(f"[stop] {exc}")
+        return 1
+
     if not tickers:
         print("[stop] No tickers provided. Use --tickers or --tickers-file.")
+        print("       Example: python scripts\\fetch_prices.py --tickers 005930 000660 035420 --start 2014-01-01")
         return 1
 
     series: list[pd.Series] = []

@@ -13,7 +13,7 @@ Preparation
 
 Outputs use the common project format: data/macro/<key>.csv with columns
 ``date,value``. Derived series are generated after raw downloads:
-``cpi_yoy``, ``yield_spread_10y_3y``, and ``credit_spread``.
+``cpi_yoy``, ``exports_yoy``, ``industrial_production``, ``yield_spread_10y_3y``, and ``credit_spread``.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ import urllib.request
 from pathlib import Path
 from typing import Iterable
 
-API_KEY = ""  # Optional local fallback. Prefer ECOS_API_KEY or --api-key.
+API_KEY = "BOTA7YYC44OQEK1A6IE2"  # Optional local fallback. Prefer ECOS_API_KEY or --api-key.
 BASE = "https://ecos.bok.or.kr/api"
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "data" / "macro"
@@ -35,14 +35,24 @@ OUT_DIR = ROOT / "data" / "macro"
 # key: (stat_code, cycle, item_code, start)
 # Fill item_code=None values after checking with --discover.
 SERIES: dict[str, tuple[str | None, str, str | None, str]] = {
-    "base_rate": ("722Y001", "M", "0101000", "199901"),
-    "cpi_index": ("901Y009", "M", "0", "199901"),
-    "treasury_3y": ("817Y002", "D", None, "20000101"),
-    "treasury_10y": ("817Y002", "D", None, "20000101"),
-    "corp_aa_3y": ("817Y002", "D", None, "20000101"),
-    "usdkrw": ("731Y001", "D", None, "20000101"),
-    "kospi": ("802Y001", "D", None, "20000101"),
-    "gdp_qoq": (None, "Q", None, "1999Q1"),
+     # key: (통계표코드, 주기, 항목코드, 시작일)
+     # Growth-composite raw sources to add after search/discover:
+     #   "exports_level": ("<stat>", "M", "<item>", "199901")
+     #   "industrial_production_index": ("<stat>", "M", "<item>", "199901")
+     #   "leading_index_cycle": ("<stat>", "M", "<item>", "199901")
+     # fetch_ecos.py derives exports_yoy and industrial_production from the
+     # first two level/index source files when they are present.
+    "base_rate":    ("722Y001", "M", "0101000",   "199901"),
+    "cpi_index":    ("901Y009", "M", "0",         "199901"),
+    "treasury_3y":  ("817Y002", "D", "010200000", "20000101"),
+    "treasury_10y": ("817Y002", "D", "010210000", "20000101"),
+    "corp_aa_3y":   ("817Y002", "D", "010300000", "20000101"),
+    "usdkrw":       ("731Y001", "D", "0000001",   "20000101"),
+    "kospi":        ("802Y001", "D", "0001000",   "20000101"),
+    "gdp_qoq":      ("200Y102", "Q", "10111",     "1999Q1"),
+    "exports_level": ("901Y118", "M", "T002",      "199901"),
+    "industrial_production_index": ("901Y033", "M", "A00/2", "199901"),
+    "leading_index_cycle": ("901Y067", "M", "I16E", "199901"),
 }
 
 
@@ -108,7 +118,8 @@ def fetch_series(
     end: str,
     api_key: str,
 ) -> list[tuple[str, float]]:
-    url = _ecos_url(["StatisticSearch", api_key, "json", "kr", 1, 100000, stat, cycle, start, end, item])
+    item_parts = [part for part in str(item).replace(",", "/").split("/") if part]
+    url = _ecos_url(["StatisticSearch", api_key, "json", "kr", 1, 100000, stat, cycle, start, end, *item_parts])
     data = _get_json(url)
     rows = data.get("StatisticSearch", {}).get("row", [])
     if not rows:
@@ -149,6 +160,22 @@ def derive_and_save() -> None:
     if cpi is not None:
         cpi_yoy = (cpi.pct_change(12) * 100.0).dropna()
         write_csv("cpi_yoy", [(date.strftime("%Y-%m-%d"), round(float(value), 4)) for date, value in cpi_yoy.items()])
+
+    exports = load("exports_level")
+    if exports is not None:
+        exports_yoy = (exports.pct_change(12) * 100.0).dropna()
+        write_csv(
+            "exports_yoy",
+            [(date.strftime("%Y-%m-%d"), round(float(value), 4)) for date, value in exports_yoy.items()],
+        )
+
+    production = load("industrial_production_index")
+    if production is not None:
+        production_yoy = (production.pct_change(12) * 100.0).dropna()
+        write_csv(
+            "industrial_production",
+            [(date.strftime("%Y-%m-%d"), round(float(value), 4)) for date, value in production_yoy.items()],
+        )
 
     t3 = load("treasury_3y")
     t10 = load("treasury_10y")

@@ -417,27 +417,31 @@ except Exception as _e:
 # ── AI 시장 국면 모델 (TabPFN + HMM) ─────────────────────────────────────
 # 서버 시작 시 매크로 데이터로 자동 학습. 실패해도 서버는 계속 동작.
 REGIME_MODEL = None
+_LEGACY_REGIME_MODEL_PATH = os.path.join(BASE_DIR, 'regime_model.py')
 try:
-    if os.environ.get('KQ_ENABLE_TABPFN', '0').strip() == '1':
-        os.environ['KQ_DISABLE_TABPFN'] = '0'
+    if not os.path.exists(_LEGACY_REGIME_MODEL_PATH):
+        print('  [regime] legacy 모델 없음 - 검증된 v2 payload 모드 사용')
     else:
-        os.environ['KQ_DISABLE_TABPFN'] = '1'
-    import regime_model as _rm
-    if EXCEL_MACRO:
-        print('  [regime] 매크로 국면 모델 학습 중...')
-        REGIME_MODEL = _rm.HierarchicalRegimeModel()
-        REGIME_MODEL.fit(EXCEL_MACRO)
-        if REGIME_MODEL.trained:
-            _classifier = REGIME_MODEL.classifier.model_type or 'Rule-based'
-            _n_samples = len(REGIME_MODEL.train_data) if REGIME_MODEL.train_data is not None else 0
-            print(f'  [regime] OK 학습 완료 - 분류기: {_classifier}, 표본: {_n_samples}분기')
+        if os.environ.get('KQ_ENABLE_TABPFN', '0').strip() == '1':
+            os.environ['KQ_DISABLE_TABPFN'] = '0'
         else:
-            print('  [regime] WARN 학습 실패 (데이터 부족) - 폴백 모드')
-            REGIME_MODEL = None
-    else:
-        print('  [regime] 매크로 데이터 없음 - 모델 학습 건너뜀')
+            os.environ['KQ_DISABLE_TABPFN'] = '1'
+        import regime_model as _rm
+        if EXCEL_MACRO:
+            print('  [regime] 매크로 국면 모델 학습 중...')
+            REGIME_MODEL = _rm.HierarchicalRegimeModel()
+            REGIME_MODEL.fit(EXCEL_MACRO)
+            if REGIME_MODEL.trained:
+                _classifier = REGIME_MODEL.classifier.model_type or 'Rule-based'
+                _n_samples = len(REGIME_MODEL.train_data) if REGIME_MODEL.train_data is not None else 0
+                print(f'  [regime] OK 학습 완료 - 분류기: {_classifier}, 표본: {_n_samples}분기')
+            else:
+                print('  [regime] WARN 학습 실패 (데이터 부족) - 폴백 모드')
+                REGIME_MODEL = None
+        else:
+            print('  [regime] 매크로 데이터 없음 - 모델 학습 건너뜀')
 except Exception as _e:
-    print(f'  [regime] 모델 로드 실패 (서버는 계속 동작): {_e}')
+    print(f'  [regime] legacy 모델 로드 실패 - v2 payload 모드 사용: {_e}')
     REGIME_MODEL = None
 
 # ── 종목 유니버스 ─────────────────────────────────────────────────────────
