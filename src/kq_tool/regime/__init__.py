@@ -30,9 +30,31 @@ from .regime_labels import (
     regime_diagnostics,
     transition_matrix,
 )
+from .regime_model_v2 import (
+    FEATURES as REGIME_MODEL_V2_FEATURES,
+    FORBIDDEN_FEATURE_TERMS,
+    MEMORY_FEATURES,
+    ModelConfig,
+    build_features,
+    calibration_table,
+    log_loss_score,
+    naive_nowcast_baseline,
+    p3_forecast_baseline,
+    walk_forward_predict,
+)
 from .response import build_regime_ai_payload
 
 __all__ = [
+    "walk_forward_predict",
+    "p3_forecast_baseline",
+    "naive_nowcast_baseline",
+    "log_loss_score",
+    "calibration_table",
+    "build_features",
+    "ModelConfig",
+    "MEMORY_FEATURES",
+    "FORBIDDEN_FEATURE_TERMS",
+    "REGIME_MODEL_V2_FEATURES",
     "transition_matrix",
     "regime_diagnostics",
     "next_quarter_transition_probs",
@@ -60,4 +82,5 @@ __all__ = [
     "current_regime_snapshot",
     "to_observable",
 ]
+
 

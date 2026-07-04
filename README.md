@@ -112,6 +112,8 @@ python tests\validation_dsr_regime.py
 python tests\run_dsr_regime_analysis.py --data-dir tests --n-trials 15 --benchmark KOSPI
 python tests\validation_macro_pit.py
 python tests\validation_regime_labels.py
+python tests\validation_regime_model.py
+python tests\validation_regime_shuffle.py --data-dir tests --n 500
 ```
 
 ## 현재 구조
@@ -165,6 +167,7 @@ src/kq_tool/
     macro_data.py
     market_report.py
     regime_labels.py
+    regime_model_v2.py
     response.py
   screener/
     engine.py
@@ -203,6 +206,8 @@ Alpha Decay 신호 방향, 로보 점수 가중치/라벨, 로보 매수/매도 
 - 국면 리포트: `/api/market_report` 조회/등록 API와 AI 시장 국면 탭의 스크롤형 보고서 목록/직접 등록 UI 추가
 - 국면 PiT: `src/kq_tool/regime/macro_data.py`와 `docs/macro_publication_lags.md`로 매크로 발표지연 lag를 등록하고 `tests\validation_macro_pit.py`로 문서/코드 정합성과 look-ahead 방지를 검증
 - 국면 라벨: `src/kq_tool/regime/regime_labels.py`로 GDP expanding median + CPI YoY momentum 기반 PiT 안전 4국면 라벨을 만들고 `tests\validation_regime_labels.py`로 히스테리시스와 라벨 누수를 검증
+- 국면 모델 v2: `src/kq_tool/regime/regime_model_v2.py`로 라벨 축과 피처 축을 분리하고 purged walk-forward 확률을 `tests\validation_regime_model.py`로 검증
+- 국면 셔플: `tests\validation_regime_shuffle.py`로 실제 국면 기반 walk-forward 전략 선택기가 셔플된 가짜 국면과 정적 60/40을 이기는지 검증
 - 학술 검증: Fama-French 3/5 팩터 회귀 helper를 추가해 포트폴리오 alpha와 t-stat을 표준 팩터 기준으로 검증 가능
 - 학술 검증 실행: `python tests\validation_factor_regression.py --model ff5 --top-n 500`
 - 학술 검증 입력: `tests\export_dsr_inputs.py`로 DSR/국면별 성과분해 공용 입력 3개 CSV 생성 가능
@@ -243,6 +248,8 @@ Alpha Decay는 특히 매수형 기술 신호의 유효기간/재점검 기간�
 
 - [docs/operating-thresholds-after-costs.md](docs/operating-thresholds-after-costs.md)
 - [docs/signal_quality_segmentation.md](docs/signal_quality_segmentation.md)
+
+
 
 
 
