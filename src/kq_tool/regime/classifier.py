@@ -25,6 +25,7 @@ def _snapshot_from_ui_payload() -> dict:
         "reeval_flag": ui["reeval_flag"],
         "reeval_reasons": ui["reeval_reasons"],
         "stay_prob_next_quarter": ui["stay_prob_next_quarter"],
+        "shadow_ledger": ui.get("shadow_ledger"),
     }
 
 
@@ -80,3 +81,6 @@ def current_regime_snapshot(
 
 
 _current_regime_snapshot = current_regime_snapshot
+
+
+

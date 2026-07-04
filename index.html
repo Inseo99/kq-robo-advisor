@@ -380,7 +380,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
   <div id="panel-macro" class="panel-content" style="display:none">
     <!-- 모델 상태 배지 -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--mu)">12년 한국 매크로 학습 (<span id="regime-samples">-</span>분기)</div>
+      <div style="font-size:11px;color:var(--mu)">2001~2026 PiT 매크로 라벨 (<span id="regime-samples">-</span>개월)</div>
       <div id="regime-model-badge" style="padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bl)22;color:var(--bl)">⏳</div>
     </div>
 
@@ -404,7 +404,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
 
     <!-- 다음 분기 전환 확률 -->
     <div class="section">
-      <div class="sec-head">다음 분기 전환 확률 <span style="color:var(--mu);font-weight:400">— HMM 12년 통계</span></div>
+      <div class="sec-head">다음 분기 전환 확률 <span style="color:var(--mu);font-weight:400">— P^3 전이행렬 (2001~2026)</span></div>
       <div id="next-quarter-bars"></div>
     </div>
 
@@ -1651,6 +1651,16 @@ function renderRecommendPortfolio(){
   const alphaExcess = regimeAlpha.excess_pct != null ? Number(regimeAlpha.excess_pct).toFixed(2)+'%p' : '-';
   const alphaLine = regimeAlpha.status ? `국면별 α Decay 검증: ${regimeAlpha.status} · 신호강도 ${alphaScale} · excess ${alphaExcess}` : '';
   const reevalText = validity.reeval_flag === true ? '필요' : validity.reeval_flag === false ? '미발동' : '규칙 확인';
+  const shadow = d.shadow_ledger || reg.shadow_ledger || macroData?.ui_payload?.shadow_ledger || null;
+  const shadowBq = shadow?.band_vs_quarterly || {};
+  const shadowHtml = shadow ? `
+    <div class="section">
+      <div class="sec-head">리밸런싱 정책 자기검증</div>
+      <div style="background:#21262d;border-radius:6px;padding:9px;font-size:11px;line-height:1.7;color:var(--tx)">
+        <div><b>${shadow.period || '-'}</b> · 판정: <b style="color:var(--gr)">${shadowBq.verdict || '-'}</b></div>
+        <div style="color:var(--mu)">분기 캘린더 대비 절감 비용 ${shadowBq.cost_saved_pctp ?? '-'}%p · 성과차 ${shadowBq.cagr_gap_pctp ?? '-'}%p · 회전율 절감 ${shadowBq.turnover_saved_yr ?? '-'}x/년</div>
+      </div>
+    </div>` : '';
 
   let html = `
     <div style="background:#21262d;border-radius:8px;padding:12px;margin-bottom:12px">
@@ -1669,6 +1679,7 @@ function renderRecommendPortfolio(){
       <div class="metric-card"><div class="metric-label">조기 재평가</div><div class="metric-val" style="font-size:11px">${reevalText}</div></div>
     </div>
 
+    ${shadowHtml}
     <div class="section">
       <div class="sec-head">완성형 포트폴리오 비중</div>
       <table class="sig-table">`;
@@ -1972,6 +1983,7 @@ window.addEventListener('load', ()=>{
 </script>
 </body>
 </html>
+
 
 
 

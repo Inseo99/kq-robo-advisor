@@ -1,4 +1,4 @@
-"""Backtest helpers."""
+﻿"""Backtest helpers."""
 
 from .costs import (
     apply_transaction_cost,
@@ -12,6 +12,7 @@ from .engine import equal_weight_period_return, normalize_benchmark_to_equity, u
 from .metrics import perf_metrics
 from .orchestrator import run_rebalanced_strategy_backtest
 from .preparation import (
+    evaluation_start_for_period,
     filter_strategy_benchmark_period,
     filter_strategy_price_period,
     prepare_strategy_price_frame,
@@ -46,6 +47,7 @@ __all__ = [
     "normalize_strategy_key",
     "perf_metrics",
     "portfolio_turnover",
+    "evaluation_start_for_period",
     "filter_strategy_benchmark_period",
     "filter_strategy_price_period",
     "prepare_strategy_price_frame",
@@ -65,3 +67,4 @@ __all__ = [
     "underwater_curve",
     "use_fixed_start_for_period",
 ]
+

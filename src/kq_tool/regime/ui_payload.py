@@ -30,6 +30,7 @@ DEFAULT_OUT_DIR = ROOT / "tests" / "analysis_outputs"
 DEFAULT_OUT = DEFAULT_OUT_DIR / "regime_ui_payload.json"
 NOWCAST_PROBS = DEFAULT_OUT_DIR / "regime_model_probs_nowcast.csv"
 VERDICT_FILE = DEFAULT_OUT_DIR / "regime_model_verdict.txt"
+SHADOW_SUMMARY = ROOT / "data" / "state" / "shadow_summary.json"
 
 TRADING_DAYS_PER_MONTH = 21.0
 CALENDAR_DAYS_PER_MONTH = 30.44
@@ -171,6 +172,17 @@ def _expected_remaining(monthly_stay_prob: float) -> dict[str, float | int | str
     }
 
 
+
+def _load_shadow_summary(path: Path = SHADOW_SUMMARY) -> dict[str, Any] | None:
+    """Load optional shadow-ledger summary for UI policy self-check cards."""
+
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
 def _read_method_label(path: Path = VERDICT_FILE) -> tuple[str, dict[str, str | None]]:
     selected = {"nowcast": None, "forecast": None}
     if path.exists():
@@ -256,8 +268,12 @@ def build_payload(
             "labels": str(labels_path),
             "nowcast_probs": str(nowcast_probs_path),
             "verdict": str(verdict_path),
+            "shadow_summary": str(SHADOW_SUMMARY),
         },
     }
+    shadow = _load_shadow_summary()
+    if shadow is not None:
+        payload["shadow_ledger"] = shadow
     return payload
 
 
