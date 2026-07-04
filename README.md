@@ -55,6 +55,17 @@ python server.py
 http://127.0.0.1:8888/
 ```
 
+
+## ECOS 매크로 데이터 수집
+
+실제 국면 라벨/모델 검증에는 `data/macro/*.csv` 원자료가 필요합니다. 수집 절차는 [docs/ecos_data_guide.md](docs/ecos_data_guide.md)를 기준으로 합니다.
+
+```powershell
+$env:ECOS_API_KEY = "발급받은_API_KEY"
+python scripts\fetch_ecos.py --discover 817Y002
+python scripts\fetch_ecos.py
+python tests\validation_macro_pit.py
+```
 ## 시황/애널리스트 리포트 수집
 
 AI 시장 국면 탭은 `data/market_reports/latest.md`와 `data/market_reports/user_reports.md`를 읽어 정량 국면의 보조 근거로 사용합니다.
@@ -114,6 +125,7 @@ python tests\validation_macro_pit.py
 python tests\validation_regime_labels.py
 python tests\validation_regime_model.py
 python tests\validation_regime_shuffle.py --data-dir tests --n 500
+python tests\validation_regime_shuffle_v2.py --n 500
 ```
 
 ## 현재 구조
@@ -208,6 +220,7 @@ Alpha Decay 신호 방향, 로보 점수 가중치/라벨, 로보 매수/매도 
 - 국면 라벨: `src/kq_tool/regime/regime_labels.py`로 GDP expanding median + CPI YoY momentum 기반 PiT 안전 4국면 라벨을 만들고 `tests\validation_regime_labels.py`로 히스테리시스와 라벨 누수를 검증
 - 국면 모델 v2: `src/kq_tool/regime/regime_model_v2.py`로 라벨 축과 피처 축을 분리하고 purged walk-forward 확률을 `tests\validation_regime_model.py`로 검증
 - 국면 셔플: `tests\validation_regime_shuffle.py`로 실제 국면 기반 walk-forward 전략 선택기가 셔플된 가짜 국면과 정적 60/40을 이기는지 검증
+- 국면 셔플 v2: `tests\validation_regime_shuffle_v2.py`로 고정 국면 매핑(Tier 1)과 전략 선택기(Tier 2)를 분리해 검증
 - 학술 검증: Fama-French 3/5 팩터 회귀 helper를 추가해 포트폴리오 alpha와 t-stat을 표준 팩터 기준으로 검증 가능
 - 학술 검증 실행: `python tests\validation_factor_regression.py --model ff5 --top-n 500`
 - 학술 검증 입력: `tests\export_dsr_inputs.py`로 DSR/국면별 성과분해 공용 입력 3개 CSV 생성 가능
@@ -248,6 +261,7 @@ Alpha Decay는 특히 매수형 기술 신호의 유효기간/재점검 기간�
 
 - [docs/operating-thresholds-after-costs.md](docs/operating-thresholds-after-costs.md)
 - [docs/signal_quality_segmentation.md](docs/signal_quality_segmentation.md)
+
 
 
 

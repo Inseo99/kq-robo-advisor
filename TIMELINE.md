@@ -48,6 +48,8 @@ existing `server.py` app runnable while extracting tested modules into
   transition matrices, and `tests/validation_regime_labels.py`.
 - Added regime_model_v2 with separated market features, previous-regime memory, purged walk-forward probabilities, baseline blending, and `tests/validation_regime_model.py`.
 - Added `tests/validation_regime_shuffle.py` for walk-forward regime strategy selection versus shuffled fake regimes and static 60/40.
+- Added `tests/validation_regime_shuffle_v2.py` to separate fixed regime allocation information from Tier 2 selector effects.
+- Added `scripts/fetch_ecos.py` and `docs/ecos_data_guide.md` for ECOS-based `data/macro/*.csv` collection.
 - Release artifact contract tests verify launcher/regression batch files and
   handoff docs keep pointing to the expected commands.
 - Windows launcher contract tests now lock Python discovery order, Chrome-first
@@ -486,6 +488,7 @@ review-window tool. The next validation pass should separate:
   creating `data/report_sources.json` and enabling approved public sources.
 - Added offline unit tests for RSS parsing, HTML text extraction, source config loading,
   markdown rendering, and sample config generation.
+
 
 
 
