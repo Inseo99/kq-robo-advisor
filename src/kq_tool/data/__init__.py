@@ -10,6 +10,11 @@ from .app_data import (
     load_close_panel,
     ticker_to_code as app_ticker_to_code,
 )
+from .gateway import (
+    fingerprint,
+    get_kospi_benchmark,
+    stamp_results,
+)
 from .cache import cached, clear_expired
 from .fundamental import (
     MCAP_FIN_KEY as FUNDAMENTAL_MCAP_FIN_KEY,
@@ -60,6 +65,9 @@ from .universe import FALLBACK_UNIVERSE, build_universe, market_counts, yahoo_su
 
 __all__ = [
     "load_close_panel",
+    "stamp_results",
+    "get_kospi_benchmark",
+    "fingerprint",
     "latest_price_date",
     "get_regime_payload",
     "get_price_series",

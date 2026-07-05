@@ -29,10 +29,13 @@ except Exception:
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
+sys.path.insert(0, os.path.join(ROOT_DIR, 'src'))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from validation_core import prepare_bt_data, run_bt_core
+from kq_tool.data.gateway import stamp_results
 
 
 def run_permutation_test(data, strategy='quant', n_iter=1000, top_n=5,
@@ -277,6 +280,8 @@ if __name__ == '__main__':
         save_data[f'{s}_p_upper'] = r['p_value_upper']
         save_data[f'{s}_p_lower'] = r['p_value_lower']
         save_data[f'{s}_p_two'] = r['p_value_two_sided']
-    np.savez(save_path, **save_data)
+    np.savez(save_path, **stamp_results(save_data))
     print(f"\n💾 결과 저장: {save_path}")
+
+
 

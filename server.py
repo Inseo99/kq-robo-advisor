@@ -805,27 +805,8 @@ def _dl(ticker, period='1y'):
                 return df, False
         except Exception as e:
             pass
-
-    # 2) yfinance fallback — UNIVERSE에 없는 티커만 시도 (ETF, KOSPI 지수 등)
-    #    개별 종목(KOSPI/KOSDAQ)은 엑셀이 우선이므로 여기 도달 시 fallback 없이 종료
-    if ticker not in UNIVERSE:
-        _ensure_yf_session()
-        try:
-            import yfinance as yf
-            df = _yf_retry(lambda: yf.download(ticker, period=period, progress=False, auto_adjust=False), tries=1)
-            if df is not None and not df.empty:
-                if _kq_prepare_yfinance_price_frame is not None:
-                    prepared = _kq_prepare_yfinance_price_frame(df, period)
-                    if prepared is not None:
-                        return prepared, False
-                else:
-                    if isinstance(df.columns, pd.MultiIndex):
-                        df.columns = df.columns.get_level_values(0)
-                    if len(df) >= (1 if period == '1d' else 20):
-                        return df, False
-        except Exception:
-            pass
-
+
+    # 2) 단일 게이트웨이 원칙: 실시간 yfinance fallback 금지
     # 3) 샘플 데이터
     if ticker not in _warned_tickers:
         _warned_tickers.add(ticker)
@@ -1414,28 +1395,13 @@ def run_screener():
     return _cached('screener', 1800, _run_screener)
 
 def _prewarm_screener_cache():
-    """스크리너 병렬 실행 전 필요한 parquet 캐시를 한 번만 로드한다."""
-    if '_dl_mod' not in globals():
-        return
-    price_sheets = getattr(_dl_mod, 'PRICE_SHEETS', {})
-    metric_sheets = getattr(_dl_mod, 'METRIC_SHEETS', {})
-    if _kq_prewarm_screener_cache is not None:
-        _kq_prewarm_screener_cache(_dl_mod._load_price_parquet, price_sheets, metric_sheets)
-        return
-    for kind in ('open', 'high', 'low', 'close', 'volume'):
-        fname = price_sheets.get(kind)
-        if fname:
-            try:
-                _dl_mod._load_price_parquet(fname)
-            except Exception:
-                pass
-    for metric in ('per', 'pbr', 'eps', 'bps', 'div_yield'):
-        fname = metric_sheets.get(metric)
-        if fname:
-            try:
-                _dl_mod._load_price_parquet(fname)
-            except Exception:
-                pass
+    """스크리너는 app_data 수정주가 패널을 우선 사용한다.
+
+    구 price parquet prewarm은 검증-앱 데이터 불일치의 재발 경로라 제거했다.
+    재무 metric parquet는 _fund_info/get_metric_value 호출 시 필요한 만큼만 lazy-load 한다.
+    """
+    return
+
 
 def _fetch_one(ticker):
     try:
@@ -1479,20 +1445,7 @@ def _run_screener():
             price_date = _kq_app_latest_price_date()
         except Exception:
             price_date = None
-    if price_date is None:
-        try:
-            _dl_mod._load_price_parquet('price_종가.parquet')
-            close_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
-            close_groups = _dl_mod._PRICE_GROUPS.get(close_path, {})
-            if _kq_latest_price_date_from_groups is not None:
-                price_date = _kq_latest_price_date_from_groups(close_groups)
-            else:
-                last_dates = [s.dropna().index[-1] for s in close_groups.values()
-                              if s is not None and len(s.dropna()) > 0]
-                if last_dates:
-                    price_date = max(last_dates).strftime('%Y-%m-%d')
-        except Exception:
-            price_date = None
+    # price_date는 app_data 수정주가 패널에서만 가져온다. legacy parquet fallback 금지.
 
     # 시가총액 상위 종목 사용 (스크리너 + 백테스트 일관성)
     candidates = get_top_marketcap_tickers()
@@ -1979,20 +1932,7 @@ def _run_strategy_backtest(strategy, top_n, rebalance, period, transaction_cost_
             px = {}
 
     if not px:
-        # data_loader의 종가 그룹 직접 사용 (legacy fallback)
-        _dl_mod._load_price_parquet('price_종가.parquet')
-        close_groups_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
-        close_groups = _dl_mod._PRICE_GROUPS.get(close_groups_path, {})
-        if not close_groups:
-            return {'error': '종가 데이터 로드 실패'}
-        for t in top_tickers:
-            code = _ticker_to_code(t)
-            s = close_groups.get(code)
-            if s is not None and len(s) >= 20:
-                px[t] = s
-
-    if not px:
-        return {'error': 'UNIVERSE와 데이터 매칭 실패'}
+        return {'error': '수정주가 패널(data/prices/close.csv)에서 백테스트 가격을 로드하지 못했습니다'}
 
     # KOSPI 벤치마크 (yfinance, 1회만)
     kospi = None
@@ -3163,6 +3103,9 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
 
 
 
