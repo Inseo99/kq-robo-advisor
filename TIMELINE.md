@@ -36,6 +36,22 @@ existing `server.py` app runnable while extracting tested modules into
 - Added `tests/export_dsr_inputs.py` to export shared monthly inputs for
   Deflated Sharpe Ratio and regime-conditional performance analysis:
   strategy returns, raw asset returns, and PiT monthly regime labels.
+- Added DSR and regime-conditional decomposition modules plus
+  `tests/run_dsr_regime_analysis.py` to export deflated Sharpe tables,
+  Sharpe bootstrap intervals, regime performance matrices, and benchmark
+  excess-return t-tests.
+- Added macro publication-lag audit docs, a PiT observable macro panel loader,
+  and `tests/validation_macro_pit.py` to guard regime inputs against
+  publication-lag look-ahead.
+- Added PiT-safe regime label generation in `src/kq_tool/regime/regime_labels.py`:
+  GDP vs expanding median, CPI YoY momentum, confirmation hysteresis,
+  transition matrices, and `tests/validation_regime_labels.py`.
+- Added regime_model_v2 with separated market features, previous-regime memory, purged walk-forward probabilities, baseline blending, and `tests/validation_regime_model.py`.
+- Added `tests/validation_regime_shuffle.py` for walk-forward regime strategy selection versus shuffled fake regimes and static 60/40.
+- Added `tests/validation_regime_shuffle_v2.py` to separate fixed regime allocation information from Tier 2 selector effects.
+- Added `scripts/fetch_ecos.py` and `docs/ecos_data_guide.md` for ECOS-based `data/macro/*.csv` collection.
+- Added `scripts/make_labels.py` to export PiT regime labels, diagnostics, transition matrices, and optional KOSPI regime chart.
+- Added `src/kq_tool/data/price_data.py`, `scripts/fetch_prices.py`, and `tests/validation_price_integrity.py` to detect unadjusted split-like jumps and stale/delisted price series.
 - Release artifact contract tests verify launcher/regression batch files and
   handoff docs keep pointing to the expected commands.
 - Windows launcher contract tests now lock Python discovery order, Chrome-first
@@ -474,6 +490,12 @@ review-window tool. The next validation pass should separate:
   creating `data/report_sources.json` and enabling approved public sources.
 - Added offline unit tests for RSS parsing, HTML text extraction, source config loading,
   markdown rendering, and sample config generation.
+
+
+
+
+
+
 
 
 

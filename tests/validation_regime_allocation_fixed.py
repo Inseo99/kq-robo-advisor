@@ -1,4 +1,4 @@
-"""
+﻿"""
 validation_regime_allocation_fixed.py — 사전 고정 룰 기반 국면 자산배분 검증
 
 v2 대비 개선:
@@ -25,11 +25,14 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
+sys.path.insert(0, os.path.join(ROOT_DIR, 'src'))
 
 import server
 from server import _gmv_weights, _mdp_weights, _erc_weights, ETFs, STRATEGIES
 from regime_pit import build_pit_macro_features, classify_regime_at
+from kq_tool.data.gateway import load_close_panel
 
 
 # ─────────── 사전 고정 룰 (데이터 보기 전 결정) ───────────
@@ -70,28 +73,24 @@ CACHE_FILE = os.path.join(
 )
 
 
+def _ticker_to_code(ticker):
+    return str(ticker).split('.', 1)[0]
+
+
 def load_etf_data(force_refresh=False):
-    cache_path = os.path.abspath(CACHE_FILE)
-    cache_dir = os.path.dirname(cache_path)
-    os.makedirs(cache_dir, exist_ok=True)
-    if os.path.exists(cache_path) and not force_refresh:
-        print(f"  ETF 캐시 로드: {cache_path}")
-        df = pd.read_parquet(cache_path)
-        df.index = pd.to_datetime(df.index)
-        return df
-    print(f"  yfinance에서 ETF 다운로드...")
-    import yfinance as yf
+    """ETFs 7종 종가 데이터 - 단일 게이트웨이 수정주가 패널."""
+    panel = load_close_panel()
     closes = {}
     for ticker in ETFs:
-        try:
-            ydf = yf.download(ticker, period='12y', progress=False, auto_adjust=False)
-            if isinstance(ydf.columns, pd.MultiIndex):
-                ydf.columns = ydf.columns.get_level_values(0)
-            closes[ticker] = ydf['Close'].dropna()
-        except Exception:
-            pass
-    df = pd.DataFrame(closes).dropna()
-    df.to_parquet(cache_path)
+        code = _ticker_to_code(ticker)
+        if code in panel.columns:
+            closes[ticker] = pd.to_numeric(panel[code], errors='coerce').dropna()
+        else:
+            print(f"  {ticker}: close.csv에 없음")
+    df = pd.DataFrame(closes).dropna(how='all').dropna()
+    if df.empty:
+        raise RuntimeError('ETF 수정주가 패널 로드 실패')
+    print(f"  ETF 게이트웨이 로드: {len(df)}행, {len(df.columns)}종")
     return df
 
 
@@ -470,3 +469,4 @@ if __name__ == '__main__':
     parser.add_argument('--n', type=int, default=1000)
     args = parser.parse_args()
     run_full_validation(n_placebo=args.n)
+

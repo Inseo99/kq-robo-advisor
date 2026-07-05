@@ -365,9 +365,9 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
         <span style="font-size:11px;color:var(--mu)">거래비용 bps:</span>
-        <input id="bt-cost-bps" class="num-input" type="number" min="0" step="1" value="0">
+        <input id="bt-cost-bps" class="num-input" type="number" min="0" step="1" value="10">
         <span style="font-size:11px;color:var(--mu);margin-left:6px">슬리피지 bps:</span>
-        <input id="bt-slip-bps" class="num-input" type="number" min="0" step="1" value="0">
+        <input id="bt-slip-bps" class="num-input" type="number" min="0" step="1" value="5">
       </div>
       <button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:10px" onclick="loadStratBt()">▶ 백테스트 실행</button>
       <div id="stratbt-content">
@@ -380,7 +380,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
   <div id="panel-macro" class="panel-content" style="display:none">
     <!-- 모델 상태 배지 -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--mu)">12년 한국 매크로 학습 (<span id="regime-samples">-</span>분기)</div>
+      <div style="font-size:11px;color:var(--mu)">2001~2026 PiT 매크로 라벨 (<span id="regime-samples">-</span>개월)</div>
       <div id="regime-model-badge" style="padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bl)22;color:var(--bl)">⏳</div>
     </div>
 
@@ -404,7 +404,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
 
     <!-- 다음 분기 전환 확률 -->
     <div class="section">
-      <div class="sec-head">다음 분기 전환 확률 <span style="color:var(--mu);font-weight:400">— HMM 12년 통계</span></div>
+      <div class="sec-head">다음 분기 전환 확률 <span style="color:var(--mu);font-weight:400">— P^3 전이행렬 (2001~2026)</span></div>
       <div id="next-quarter-bars"></div>
     </div>
 
@@ -1650,13 +1650,24 @@ function renderRecommendPortfolio(){
   const alphaScale = regimeAlpha.signal_tilt_scale != null ? Number(regimeAlpha.signal_tilt_scale).toFixed(2)+'x' : '-';
   const alphaExcess = regimeAlpha.excess_pct != null ? Number(regimeAlpha.excess_pct).toFixed(2)+'%p' : '-';
   const alphaLine = regimeAlpha.status ? `국면별 α Decay 검증: ${regimeAlpha.status} · 신호강도 ${alphaScale} · excess ${alphaExcess}` : '';
+  const reevalText = validity.reeval_flag === true ? '필요' : validity.reeval_flag === false ? '미발동' : '규칙 확인';
+  const shadow = d.shadow_ledger || reg.shadow_ledger || macroData?.ui_payload?.shadow_ledger || null;
+  const shadowBq = shadow?.band_vs_quarterly || {};
+  const shadowHtml = shadow ? `
+    <div class="section">
+      <div class="sec-head">리밸런싱 정책 자기검증</div>
+      <div style="background:#21262d;border-radius:6px;padding:9px;font-size:11px;line-height:1.7;color:var(--tx)">
+        <div><b>${shadow.period || '-'}</b> · 판정: <b style="color:var(--gr)">${shadowBq.verdict || '-'}</b></div>
+        <div style="color:var(--mu)">분기 캘린더 대비 절감 비용 ${shadowBq.cost_saved_pctp ?? '-'}%p · 성과차 ${shadowBq.cagr_gap_pctp ?? '-'}%p · 회전율 절감 ${shadowBq.turnover_saved_yr ?? '-'}x/년</div>
+      </div>
+    </div>` : '';
 
   let html = `
     <div style="background:#21262d;border-radius:8px;padding:12px;margin-bottom:12px">
       <div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">현재 추천 요약</div>
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
         <div style="font-size:20px;font-weight:800">${reg.current || '-'}</div>
-        <div style="font-size:12px;color:var(--mu)">신뢰도 ${topProb} · ${reg.model_type || '-'}</div>
+        <div style="font-size:12px;color:var(--mu)">신뢰도 ${topProb} · ${reg.method_label || reg.model_type || '-'}</div>
       </div>
       <div style="font-size:12px;line-height:1.6">${d.message || ''}</div>
     </div>
@@ -1665,9 +1676,10 @@ function renderRecommendPortfolio(){
       <div class="metric-card"><div class="metric-label">포트폴리오 유효기간</div><div class="metric-val">약 ${validity.valid_days || '-'}일</div></div>
       <div class="metric-card"><div class="metric-label">점검 주기</div><div class="metric-val" style="font-size:12px">${validity.rebalance || '-'}</div></div>
       <div class="metric-card"><div class="metric-label">동일 국면 유지확률</div><div class="metric-val">${validity.next_same_regime_prob ?? '-'}%</div></div>
-      <div class="metric-card"><div class="metric-label">조기 재평가</div><div class="metric-val" style="font-size:11px">확률 60% 하회</div></div>
+      <div class="metric-card"><div class="metric-label">조기 재평가</div><div class="metric-val" style="font-size:11px">${reevalText}</div></div>
     </div>
 
+    ${shadowHtml}
     <div class="section">
       <div class="sec-head">완성형 포트폴리오 비중</div>
       <table class="sig-table">`;
@@ -1727,10 +1739,10 @@ function renderRegimeAI(d){
   // 모델 배지
   el('regime-samples').textContent = d.sample_count || 0;
   const badge = el('regime-model-badge');
-  badge.textContent = `Powered by ${d.model_type}`;
+  badge.textContent = d.method_label || `Powered by ${d.model_type}`;
   if(d.model_type === 'TabPFN'){
     badge.style.background = 'var(--pu)22'; badge.style.color = 'var(--pu)';
-  } else if(d.model_type === 'LightGBM'){
+  } else if(String(d.model_type || '').includes('LightGBM')){
     badge.style.background = 'var(--bl)22'; badge.style.color = 'var(--bl)';
   } else {
     badge.style.background = 'var(--mu)22'; badge.style.color = 'var(--mu)';
@@ -1819,12 +1831,15 @@ function renderRegimeAI(d){
     const fc = d.regime_desc?.[from]?.color || '#888';
     mhtml += `<tr><td style="color:${fc};font-weight:600;font-size:10px">${from.slice(0,4)}</td>`;
     order.forEach(to => {
-      const v = (tm[from]?.[to] || 0) * 100;
+      const cell = tm[from]?.[to];
+      const prob = (cell && typeof cell === 'object') ? Number(cell.prob || 0) : Number(cell || 0);
+      const display = (cell && typeof cell === 'object' && cell.display) ? cell.display : `${(prob * 100).toFixed(0)}%`;
+      const v = prob * 100;
       const tc = d.regime_desc?.[to]?.color || '#888';
       // 확률 강도에 따른 배경 투명도
       const bg = v > 0 ? `${tc}${Math.floor(Math.min(v*2.5, 99)).toString(16).padStart(2,'0')}` : 'transparent';
       const textCol = v >= 30 ? '#fff' : 'var(--tx)';
-      mhtml += `<td style="background:${bg};color:${textCol};text-align:center;font-weight:${v>=30?700:400};font-size:10px">${v.toFixed(0)}%</td>`;
+      mhtml += `<td style="background:${bg};color:${textCol};text-align:center;font-weight:${v>=30?700:400};font-size:9px">${display}</td>`;
     });
     mhtml += '</tr>';
   });
@@ -1968,6 +1983,8 @@ window.addEventListener('load', ()=>{
 </script>
 </body>
 </html>
+
+
 
 
 

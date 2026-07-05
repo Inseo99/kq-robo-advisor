@@ -1,4 +1,4 @@
-"""Backtest orchestration helpers."""
+﻿"""Backtest orchestration helpers."""
 
 from __future__ import annotations
 
@@ -23,6 +23,21 @@ from kq_tool.backtest.selector import select_for_backtest
 
 PitSelector = Callable[[object], list[str]]
 
+def actual_rebalance_dates(price_df: pd.DataFrame, rule: str) -> pd.DatetimeIndex:
+    """Return actual last observed dates for each resample bucket."""
+
+    labels = price_df.resample(rule).last().index
+    dates = []
+    for label in labels:
+        eligible = price_df.index[price_df.index <= label]
+        if len(eligible):
+            date = eligible[-1]
+            if not dates or dates[-1] != date:
+                dates.append(date)
+    return pd.DatetimeIndex(dates)
+
+
+
 
 def run_rebalanced_strategy_backtest(
     price_df: pd.DataFrame,
@@ -37,6 +52,7 @@ def run_rebalanced_strategy_backtest(
     universe_names: Mapping[str, str] | None = None,
     transaction_cost_bps: float = 0.0,
     slippage_bps: float = 0.0,
+    evaluation_start: object | None = None,
 ) -> dict:
     """Run the reusable strategy backtest loop on prepared price data."""
 
@@ -51,12 +67,14 @@ def run_rebalanced_strategy_backtest(
         return {"error": "데이터 없음"}
 
     rule = {"M": "ME", "Q": "QE", "W": "W"}.get(rebalance, "ME")
-    months = price_df.resample(rule).last()
+    rebal_dates = actual_rebalance_dates(price_df, rule)
+    months = price_df.loc[rebal_dates]
     if len(months) < 2:
         return {"error": "리밸런싱 기간 부족"}
 
     equity = [100.0]
-    eq_dates = [price_df.index[0].strftime("%Y-%m-%d")]
+    eq_dates: list[str] = []
+    evaluation_ts = pd.Timestamp(evaluation_start) if evaluation_start is not None else None
     holdings_log = []
     previous_weights: dict[str, float] = {}
     total_cost_rate = 0.0
@@ -66,6 +84,8 @@ def run_rebalanced_strategy_backtest(
     for index in range(len(months) - 1):
         current_date = months.index[index]
         next_date = months.index[index + 1]
+        if evaluation_ts is not None and current_date < evaluation_ts:
+            continue
         hist = price_df.loc[:current_date]
         if len(hist) < 60:
             continue
@@ -95,6 +115,8 @@ def run_rebalanced_strategy_backtest(
         )
         net_period_return = apply_transaction_cost(period_return, cost_rate)
 
+        if not eq_dates:
+            eq_dates.append(current_date.strftime("%Y-%m-%d"))
         equity.append(equity[-1] * (1 + net_period_return))
         eq_dates.append(next_date.strftime("%Y-%m-%d"))
         holdings_log.append(
@@ -109,6 +131,11 @@ def run_rebalanced_strategy_backtest(
         total_turnover += turnover
         total_cost_rate += cost_rate
 
+    if not eq_dates:
+        anchor = evaluation_ts if evaluation_ts is not None else price_df.index[0]
+        eligible = price_df.index[price_df.index >= anchor]
+        anchor = eligible[0] if len(eligible) else price_df.index[-1]
+        eq_dates = [anchor.strftime("%Y-%m-%d")]
     eq_series = pd.Series(equity, index=pd.to_datetime(eq_dates))
     bench_values, bench_dates = [], []
     if benchmark is not None:
@@ -172,3 +199,4 @@ def _excess_metrics(
 
 
 _run_rebalanced_strategy_backtest = run_rebalanced_strategy_backtest
+

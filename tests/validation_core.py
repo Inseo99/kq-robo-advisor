@@ -144,10 +144,14 @@ def prepare_bt_data(universe_dict, ticker_to_code_fn,
     elif not use_top_mcap:
         print(f"  전체 유니버스 사용 ({len(target_universe)}개)")
 
-    # 1) 종가 parquet 로딩
-    _dl_mod._load_price_parquet('price_종가.parquet')
-    close_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
-    close_groups = _dl_mod._PRICE_GROUPS.get(close_path, {})
+    # 1) 수정주가 패널 로딩 (검증 관문 통과본) — 구 parquet 캐시 대체
+    src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+    from kq_tool.data.app_data import load_close_panel
+
+    _panel = load_close_panel()
+    close_groups = {code: _panel[code].dropna() for code in _panel.columns}
 
     if not close_groups:
         raise RuntimeError('종가 데이터 로드 실패')
@@ -169,17 +173,11 @@ def prepare_bt_data(universe_dict, ticker_to_code_fn,
     price_df = price_df[valid_cols]
     price_df = price_df.ffill().dropna(how='all')
 
-    # 4) KOSPI 벤치마크 (yfinance)
-    try:
-        import yfinance as yf
-        kdf = yf.download('^KS11', period='12y', progress=False, auto_adjust=False)
-        if isinstance(kdf.columns, pd.MultiIndex):
-            kdf.columns = kdf.columns.get_level_values(0)
-        kospi = kdf['Close'].dropna()
-        kospi = kospi[(kospi.index >= start_date) &
-                       (kospi.index <= (end_date or kospi.index[-1]))]
-    except Exception:
-        kospi = price_df.mean(axis=1).dropna()
+    # 4) KOSPI 벤치마크 (단일 게이트웨이, ECOS 수집본)
+    from kq_tool.data.gateway import get_kospi_benchmark
+    kospi = get_kospi_benchmark()
+    kospi = kospi[(kospi.index >= start_date) &
+                   (kospi.index <= (end_date or kospi.index[-1]))]
 
     # 5) 로보 사전계산 (RSI, MACD, MA)
     rsi_dict, macd_bull_dict, ma20_dict, ma60_dict = {}, {}, {}, {}
@@ -464,4 +462,6 @@ if __name__ == '__main__':
     print(f"  5회 평균: {np.mean(cagrs):.2f}%, 소요: {time.time()-t0:.1f}초")
 
     print(f"\n✅ Task 1 완료")
+
+
 

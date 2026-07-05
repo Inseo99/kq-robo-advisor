@@ -460,7 +460,7 @@ def build_recommendation_report(
 
     base_pct = round((1.0 - regime_tilt) * 100, 0)
     tilt_pct = round(regime_tilt * 100, 0)
-    method = f"안정성 검증 포트폴리오 앙상블 {base_pct:.0f}% + 확률가중 국면 틸트 {tilt_pct:.0f}% + 로보/Alpha Decay 미세조정"
+    method = f"안정성 검증 포트폴리오 앙상블 {base_pct:.0f}% + 확률가중 국면 틸트 {tilt_pct:.0f}% + 로보/Alpha Decay 미세조정 + 리밸런싱: 밴드(±5%p/상대25%)·국면전환 70% 부분이동"
     if regime_alpha.get("status") not in (None, "자료없음", "중립"):
         method += " + 국면별 Alpha Decay 검증 조정"
 
@@ -503,4 +503,5 @@ _stock_analysis_to_asset_signal = stock_analysis_to_asset_signal
 _load_regime_alpha_summary = load_regime_alpha_summary
 _regime_alpha_signal_adjustment = regime_alpha_signal_adjustment
 _build_recommendation_report = build_recommendation_report
+
 
