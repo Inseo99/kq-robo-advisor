@@ -3,7 +3,7 @@ data_loader.py — 엑셀 데이터 로더 (parquet 자동 캐싱)
 첫 실행: 엑셀 파싱 → parquet 저장 (15~20초)
 이후:    parquet에서 직접 로드 (1~2초)
 """
-import os, glob
+import os, glob, sys
 import pandas as pd
 import numpy as np
 
@@ -145,6 +145,24 @@ def get_latest_fin(fin_df, ticker):
             except Exception:
                 pass
     return out
+
+def get_latest_fin_asof(fin_df, ticker, asof=None):
+    """ticker의 최근 4분기 평균 재무지표 (Point-in-Time).
+
+    `date`는 회계기간 종료일이므로 그대로 쓰면 미래 정보 누수가 생긴다.
+    src/kq_tool/data/financial_pit.py의 공시 지연 규칙(Q1~Q3 +45일,
+    Q4 +90일)을 적용해 asof 시점에 관측 가능한 행만 사용한다.
+    """
+    if fin_df is None:
+        return {}
+    try:
+        from kq_tool.data.financial_pit import latest_financials_asof
+    except Exception:
+        src_dir = os.path.join(os.path.dirname(__file__), 'src')
+        if src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+        from kq_tool.data.financial_pit import latest_financials_asof
+    return latest_financials_asof(fin_df, ticker, asof=asof)
 
 # ────────────────────────────────────────────────────────────────────────
 #  3) 매크로 데이터

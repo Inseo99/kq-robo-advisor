@@ -821,14 +821,14 @@ def _c(df):
     if isinstance(c, pd.DataFrame): c = c.iloc[:,0]
     return c.squeeze()
 
-def _fund_info(ticker):
-    """재무 정보 조회 — 엑셀 데이터 우선, 없으면 yfinance"""
+def _fund_info(ticker, asof=None):
+    """재무 정보 조회 — PiT 엑셀 데이터 우선, 없으면 yfinance"""
     # 1) 엑셀 재무 데이터 우선
     if EXCEL_FIN is not None:
         code = _ticker_to_code(ticker)
         if code in _dl_mod._FIN_TICKERS_CACHE:
             try:
-                latest = _dl_mod.get_latest_fin(EXCEL_FIN, code)
+                latest = _dl_mod.get_latest_fin_asof(EXCEL_FIN, code, asof=asof)
                 if latest:
                     if _KQ_DATA_HELPERS_READY:
                         info = _kq_excel_fundamental_info(

@@ -33,6 +33,15 @@ def build_mcap_history(universe_dict, ticker_to_code_fn, fin_data,
     """모든 종목의 분기별 시총을 DataFrame으로 구성
     Returns: DataFrame, shape (날짜, 종목), value=시총
     """
+    src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+    from kq_tool.data.financial_pit import build_mcap_history_pit
+
+    return build_mcap_history_pit(
+        universe_dict, ticker_to_code_fn, fin_data, fin_tickers_cache
+    )
+
     mcap_key = '시가총액(티커-상장예정주식수 포함)(백만원)'
     mcap_series_dict = {}
 
