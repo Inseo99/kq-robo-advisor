@@ -7,6 +7,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from kq_tool.portfolio.validity import portfolio_validity
+from kq_tool.portfolio.transition_allocation import (
+    TEAConfig,
+    transition_expected_regime_target,
+)
 from kq_tool.portfolio.weights import combine_weight_sets, normalize_weights
 
 META_COMPONENTS = [
@@ -229,6 +233,17 @@ def probability_weighted_regime_target(
     """Build an asset target from all regime probabilities instead of one hard label."""
 
     targets = regime_targets or REGIME_TARGETS
+    if snapshot.get("transition_matrix"):
+        try:
+            result = transition_expected_regime_target(
+                snapshot,
+                targets,
+                TEAConfig(horizon=3, p_stay_lo=0.50, p_stay_hi=0.80),
+            )
+            return normalize_weights(result.weights.to_dict())
+        except Exception:
+            pass
+
     blend = regime_probability_blend(
         snapshot,
         current_weight=current_weight,
@@ -418,8 +433,22 @@ def build_recommendation_report(
     auto = auto_regime_tilt(snapshot)
     regime_tilt = float(auto["regime_tilt"])
     regime_blend = regime_probability_blend(snapshot)
+    tea_payload = None
+    if snapshot.get("transition_matrix"):
+        try:
+            tea_result = transition_expected_regime_target(
+                snapshot,
+                REGIME_TARGETS,
+                TEAConfig(horizon=3, p_stay_lo=0.50, p_stay_hi=0.80),
+            )
+            tea_payload = tea_result.to_payload()
+        except Exception:
+            tea_payload = None
     if regime_target is None:
-        regime_target = probability_weighted_regime_target(snapshot)
+        if tea_payload:
+            regime_target = tea_payload["weights"]
+        else:
+            regime_target = probability_weighted_regime_target(snapshot)
     else:
         regime_target = normalize_weights(regime_target)
     pre_signal_weights = combine_weight_sets(
@@ -460,7 +489,8 @@ def build_recommendation_report(
 
     base_pct = round((1.0 - regime_tilt) * 100, 0)
     tilt_pct = round(regime_tilt * 100, 0)
-    method = f"안정성 검증 포트폴리오 앙상블 {base_pct:.0f}% + 확률가중 국면 틸트 {tilt_pct:.0f}% + 로보/Alpha Decay 미세조정 + 리밸런싱: 밴드(±5%p/상대25%)·국면전환 70% 부분이동"
+    regime_method = "P^3 전이확률 기대배분" if tea_payload else "확률가중 국면 틸트"
+    method = f"안정성 검증 포트폴리오 앙상블 {base_pct:.0f}% + {regime_method} {tilt_pct:.0f}% + 로보/Alpha Decay 미세조정 + 리밸런싱: 밴드(±5%p/상대25%)·국면전환 70% 부분이동"
     if regime_alpha.get("status") not in (None, "자료없음", "중립"):
         method += " + 국면별 Alpha Decay 검증 조정"
 
@@ -476,8 +506,12 @@ def build_recommendation_report(
             "regime_probability_blend": {
                 key: round(value * 100, 1) for key, value in regime_blend.items()
             },
-            "regime_target_source": "현재 국면 확률 70% + 다음 분기 국면 확률 30%",
+            "regime_target_source": (
+                "P^3 전이행렬 기반 기대배분"
+                if tea_payload else "현재 국면 확률 70% + 다음 분기 국면 확률 30%"
+            ),
             "regime_target": {key: round(value * 100, 1) for key, value in regime_target.items()},
+            "transition_expected_allocation": tea_payload,
             "pre_signal_weights": {
                 key: round(value * 100, 1) for key, value in pre_signal_weights.items()
             },

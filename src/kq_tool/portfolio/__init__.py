@@ -20,6 +20,14 @@ from .risk_based import (
     mdp_weights,
     risk_contributions,
 )
+from .residual_momentum import (
+    FACTOR_COLS as RESIDUAL_MOMENTUM_FACTOR_COLS,
+    ResMomBacktestResult,
+    ResMomConfig,
+    compute_plain_momentum_signal,
+    compute_residual_momentum_signal,
+    run_backtest as run_residual_momentum_backtest,
+)
 from .recommender import (
     REGIME_TARGETS,
     apply_signal_tilt,
@@ -39,10 +47,40 @@ from .shadow_ledger import (
     ledger_summary,
     run_and_save as run_shadow_ledger_and_save,
 )
+from .transition_allocation import (
+    TEAConfig,
+    TEAResult,
+    compute_transition_expected_allocation,
+    regime_weights_frame,
+    transition_expected_regime_target,
+    transition_matrix_from_payload,
+)
+from .policy_bandit import (
+    BanditConfig,
+    BanditResult,
+    context_free_cum,
+    run_shadow_bandit,
+)
 from .validity import portfolio_validity
 
 __all__ = [
+    "BanditConfig",
+    "BanditResult",
+    "TEAConfig",
+    "TEAResult",
+    "RESIDUAL_MOMENTUM_FACTOR_COLS",
+    "ResMomBacktestResult",
+    "ResMomConfig",
+    "compute_transition_expected_allocation",
+    "compute_plain_momentum_signal",
+    "compute_residual_momentum_signal",
+    "context_free_cum",
+    "regime_weights_frame",
+    "transition_expected_regime_target",
+    "transition_matrix_from_payload",
     "run_shadow_ledger_and_save",
+    "run_residual_momentum_backtest",
+    "run_shadow_bandit",
     "ledger_summary",
     "build_ledger",
     "turnover",
