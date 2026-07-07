@@ -178,19 +178,21 @@ def write_report(mdf, ran, skipped, t1_ready):
                "> 매매횟수 = 리밸런싱마다 **편입(신규매수)+편출(전량매도) 종목 수의 합**. 거래비용(누적)=기간 내 비용 차감분 합.\n")
 
     out.append("## 1. 개요\n")
-    out.append("- **유니버스**: Point-in-Time 시가총액 상위 **300** (KOSPI+KOSDAQ, 분기 시총 ffill, 생존편향 없음)\n"
+    out.append("- **유니버스**: Point-in-Time 시가총액 상위 **300** (KOSPI+KOSDAQ, 분기 시총 ffill; 현재 생존자 전용 리스트는 아님. 단, 원천 캐시 커버리지 한계 존재)\n"
                "- **종목선정**: 12-1 모멘텀(최근 1개월 제외 과거 11개월) 상위 **20종목**, 동일가중\n"
                "- **실행**: 월간=월말평가→익월 첫 거래일 시초가 / 주간=금요일 종가평가→익영업일 시초가 (수정주가)\n"
                "- **거래비용**: 왕복 0.5% (편도 0.25% × 회전율 Σ|Δw|)\n"
                "- **현금수익**: 연 2% (월 0.167% / 주 0.038%, 위험회피 시 100% 현금)\n"
-               "- **벤치마크**: KODEX 200 (069500)\n"
+               "- **벤치마크**: KODEX 200 (069500), 가격수익률 기준(분배금·세금 미반영)\n"
                "- **주의**: 모멘텀 12개월 워밍업으로 실제 매매는 **2015-02**부터. Fold1 IS(2014~) 및 2015-10 이전 벤치마크 구간은 데이터 제약으로 축소됨.\n")
 
     out.append("\n### 폴드 (Walk-forward)\n")
     out.append("| 폴드 | In-Sample | Out-of-Sample |\n|---|---|---|")
     for f in C.FOLDS:
         out.append(f"| {f['name']} | {f['is'][0]} ~ {f['is'][1]} | {f['oos'][0]} ~ {f['oos'][1]} |")
-    out.append("\n> 4개 OOS 구간은 연속 → **전체 OOS = 2019-01 ~ 2026-05** (walk-forward 실거래 트랙)\n")
+    out.append("\n> 4개 OOS 구간은 연속 → **전체 OOS = 2019-01 ~ 2026-05**. "
+               "전략 규칙은 사전 고정이므로 발표에서는 'OOS 통과'가 아니라 "
+               "'구간별 강건성 평가'로 해석한다.\n")
 
     out.append("\n### 전략 정의\n")
     out.append("| 코드 | 리밸런싱 | 종목선정 | 위험회피 오버레이 |\n|---|---|---|---|")
@@ -243,6 +245,13 @@ def write_report(mdf, ran, skipped, t1_ready):
     out.append("- `results/metrics_all.csv` — 전략×폴드×IS/OOS 전체 지표\n"
                "- `results/summary_full_oos.csv` — 전체 OOS 요약\n"
                "- `results/period_records_*.csv` — 전략별 기간 레코드(감사추적: 진입/청산/보유수/회전율/비용/수익)\n")
+
+    out.append("\n\n## 6. 방법론 주의\n")
+    out.append("- 유니버스는 분기별 시총 이력에서 판정일 기준 상위 300을 뽑는다. "
+               "2014년/2018년 표본에 2026년 현재 비활성 종목이 포함되는 것을 확인했으므로 "
+               "현재 생존자 전용 리스트는 아니다. 다만 상장폐지 전체 커버리지는 원천 `data/cache` 범위에 의존한다.\n"
+               "- KODEX 200 벤치마크는 가격수익률 기준이다. 분배금 재투자 총수익률을 쓰지 않았으므로 "
+               "전략의 벤치마크 대비 초과수익은 일부 높게 보일 수 있다.\n")
 
     path = os.path.join(C.RESULTS, "report.md")
     with open(path, "w", encoding="utf-8") as fp:

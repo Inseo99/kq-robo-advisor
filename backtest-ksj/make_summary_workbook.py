@@ -187,7 +187,7 @@ def build_conditions_sheet(wb):
     ws["A1"].font = TITLE_FONT
 
     rows = [
-        ("유니버스", "Point-in-Time 시가총액 상위 300 (KOSPI+KOSDAQ, 분기 시총 ffill, 생존편향 없음)"),
+        ("유니버스", "Point-in-Time 시가총액 상위 300 (KOSPI+KOSDAQ, 분기 시총 ffill; 현재 생존자 전용 리스트는 아님. 단, 원천 캐시 커버리지 한계 존재)"),
         ("종목선정 - mom20", SELECTION_DESC["mom20"]),
         ("종목선정 - kd200", SELECTION_DESC["kd200"] + " (시초가 시계열 없어 종가→종가로 보유수익 계산)"),
         ("모멘텀 정의", f"P(t-{C.MOM_SKIP_M}개월) / P(t-{C.MOM_LOOKBACK_M}개월) - 1  (최근 {C.MOM_SKIP_M}개월 제외)"),
@@ -195,7 +195,7 @@ def build_conditions_sheet(wb):
         ("실행(주간)", "금요일 종가 평가 -> 익영업일 시초가 진입"),
         ("거래비용", f"왕복 {C.COST_ONE_WAY*2*100:.1f}% (편도 {C.COST_ONE_WAY*100:.2f}% × 회전율 Σ|Δw|)"),
         ("현금수익", f"연 {C.CASH_ANNUAL*100:.1f}% (월 {C.CASH_MONTHLY*100:.3f}% / 주 {C.CASH_WEEKLY*100:.3f}%, 위험회피 시 전액 현금)"),
-        ("벤치마크", f"{C.BENCHMARK_LABEL}"),
+        ("벤치마크", f"{C.BENCHMARK_LABEL}, 가격수익률 기준(분배금·세금 미반영)"),
         ("", ""),
         ("t1 위험회피 (s2)", VARIANT_DESC["s2"]),
         ("t1 - ① 추세이탈", f"S&P500 종가 < {C.T1_TREND_MA_M}개월({C.T1_TREND_MA_W}주) 이동평균"),
@@ -214,6 +214,8 @@ def build_conditions_sheet(wb):
         ("⚠️ 데이터 주의", "가격 데이터 2025~2026 구간은 합성(synthetic)으로 크게 부풀려짐(예: KODEX200 약4배, 삼성전자 약6배). "
                        "2024년까지는 실제와 유사. Fold4·전체OOS 절대 CAGR은 비현실적이므로 전략 간 상대 비교로만 해석할 것."),
         ("현금비중 정의", "리밸런싱 시점 중 n_hold==0(무투자, 현금 100%)인 비율. 위험회피 발동 또는 종목선정 실패 시 발생."),
+        ("방법론 주의", "유니버스는 현재 생존자 전용 리스트가 아니지만 상장폐지 전체 커버리지는 원천 data/cache 범위에 의존. "
+                    "KODEX200 벤치마크는 분배금 재투자 총수익률이 아닌 가격수익률 기준."),
     ]
     r = 3
     for k, v in rows:
