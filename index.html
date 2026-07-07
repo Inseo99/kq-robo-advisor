@@ -1613,7 +1613,9 @@ function renderStratBt(){
         const audit = rep.filter_audit || {};
         const spread = audit.avg_spread;
         const hit = audit.hit_rate;
-        const pval = audit.hit_p_value;
+        const hitP = audit.hit_p_value;
+        const spreadP = audit.avg_spread_p_value;
+        const periodText = audit.periods_tested ? `${audit.positive_periods}/${audit.periods_tested}` : '-';
         const verdict = (spread == null || hit == null) ? {label:'보류', color:'var(--mu)'}
                       : (spread > 0 && hit >= 50) ? {label:'적용 후보', color:'var(--gr)'}
                       : {label:'미적용', color:'var(--rd)'};
@@ -1626,7 +1628,9 @@ function renderStratBt(){
           <td style="text-align:right">${audit.n_events??'-'}</td>
           <td style="text-align:right;color:${(spread||0)>=0?'var(--gr)':'var(--rd)'}">${spread==null?'-':(spread>=0?'+':'')+spread.toFixed(2)+'%p'}</td>
           <td style="text-align:right;color:${(hit||0)>=50?'var(--gr)':'var(--rd)'}">${hit==null?'-':hit.toFixed(1)+'%'}</td>
-          <td style="text-align:right;color:${pval!=null && pval<0.05?'var(--gr)':'var(--mu)'}">${pval==null?'-':'p='+pval.toFixed(3)}</td>
+          <td style="text-align:right;color:${hitP!=null && hitP<0.05?'var(--gr)':'var(--mu)'}">${hitP==null?'-':'p='+hitP.toFixed(3)}</td>
+          <td style="text-align:right;color:${spreadP!=null && spreadP<0.05?'var(--gr)':'var(--mu)'}">${spreadP==null?'-':'p='+spreadP.toFixed(3)}</td>
+          <td style="text-align:right">${periodText}</td>
           <td style="text-align:right;color:${verdict.color};font-weight:700">${verdict.label}</td>
         </tr>`;
       }).join('');
@@ -1641,14 +1645,17 @@ function renderStratBt(){
             <th style="text-align:right;color:var(--mu);font-size:10px">이벤트</th>
             <th style="text-align:right;color:var(--mu);font-size:10px">대체-제외</th>
             <th style="text-align:right;color:var(--mu);font-size:10px">Hit</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">p</th>
+            <th style="text-align:right;color:var(--mu);font-size:10px">Hit p</th>
+            <th style="text-align:right;color:var(--mu);font-size:10px">격차 p</th>
+            <th style="text-align:right;color:var(--mu);font-size:10px">구간+</th>
             <th style="text-align:right;color:var(--mu);font-size:10px">판정</th></tr>
         ${reportRows}
       </table>
       <div style="color:var(--mu);font-size:10px;margin-top:5px;line-height:1.5">
         ${d.overlay_report.description || ''}<br>
         대체-제외는 로보필터가 제외한 종목과 대신 편입한 종목의 다음 리밸런싱 구간 평균수익률 차이입니다.<br>
-        p는 이벤트 단위 Hit&gt;50% 이항검정입니다. p가 약하면 Hit 단독이 아니라 평균 격차와 ON/OFF 전체 성과를 함께 봅니다.
+        Hit p는 이벤트 단위 Hit&gt;50% 이항검정, 격차 p는 이벤트별 대체-제외 평균이 0보다 다른지 보는 t-test입니다.<br>
+        필터는 기여 증거가 있을 때만 적용하고, 증거가 없거나 방향이 음수면 기본값인 미적용을 유지합니다.
       </div>`;
     }
   } else if(hasBench){

@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping
 from math import comb
 
 import pandas as pd
+from scipy import stats
 
 from kq_tool.config import RISK_FREE_RATE
 from kq_tool.backtest.costs import (
@@ -293,6 +294,12 @@ def _summarize_filter_audit(records: list[dict]) -> dict:
             "hit_n": 0,
             "hit_rate": None,
             "hit_p_value": None,
+            "avg_spread_n": 0,
+            "avg_spread_t_stat": None,
+            "avg_spread_p_value": None,
+            "period_consistency": [],
+            "positive_periods": 0,
+            "periods_tested": 0,
             "recent": [],
         }
     excluded_returns = [
@@ -320,6 +327,8 @@ def _summarize_filter_audit(records: list[dict]) -> dict:
         "hit_n": int(hit_n),
         "hit_rate": round(hit_count / hit_n * 100, 1) if hit_n else None,
         "hit_p_value": _binomial_two_sided_pvalue(hit_count, hit_n),
+        **_spread_ttest(spreads),
+        **_period_spread_consistency(records),
         "recent": records[-6:],
     }
 
@@ -332,6 +341,58 @@ def _binomial_two_sided_pvalue(successes: int, n: int) -> float | None:
     lower = sum(comb(n, k) for k in range(0, successes + 1)) / (2 ** n)
     upper = sum(comb(n, k) for k in range(successes, n + 1)) / (2 ** n)
     return round(float(min(1.0, 2 * min(lower, upper))), 4)
+
+
+def _spread_ttest(spreads: list[float]) -> dict:
+    """One-sample t-test for event-level replacement-minus-excluded spreads."""
+
+    clean = [float(value) for value in spreads if pd.notna(value)]
+    if len(clean) < 2:
+        return {
+            "avg_spread_n": len(clean),
+            "avg_spread_t_stat": None,
+            "avg_spread_p_value": None,
+        }
+    t_stat, p_value = stats.ttest_1samp(clean, 0.0, nan_policy="omit")
+    return {
+        "avg_spread_n": len(clean),
+        "avg_spread_t_stat": round(float(t_stat), 3) if pd.notna(t_stat) else None,
+        "avg_spread_p_value": round(float(p_value), 4) if pd.notna(p_value) else None,
+    }
+
+
+def _period_spread_consistency(records: list[dict]) -> dict:
+    """Check sign stability across the same market windows used in the KSJ review."""
+
+    windows = [
+        ("2019-2020", "2019-01", "2020-12"),
+        ("2021-2022", "2021-01", "2022-12"),
+        ("2023-2024", "2023-01", "2024-12"),
+        ("2025-2026", "2025-01", "2026-12"),
+    ]
+    rows = []
+    for label, start, end in windows:
+        values = []
+        for record in records:
+            spread = record.get("spread")
+            date = str(record.get("date", ""))
+            if spread is not None and start <= date <= end:
+                values.append(float(spread))
+        avg = _mean(values)
+        rows.append(
+            {
+                "period": label,
+                "n": len(values),
+                "avg_spread": _round_pct(avg),
+                "sign": "positive" if avg is not None and avg > 0 else "negative" if avg is not None and avg < 0 else "none",
+            }
+        )
+    tested = [row for row in rows if row["n"] > 0 and row["sign"] != "none"]
+    return {
+        "period_consistency": rows,
+        "positive_periods": sum(1 for row in tested if row["sign"] == "positive"),
+        "periods_tested": len(tested),
+    }
 
 
 def _round_pct(value: float | None) -> float | None:

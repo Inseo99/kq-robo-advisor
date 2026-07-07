@@ -199,6 +199,11 @@ def load_kq_app_rows() -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
                 "filter_hit_count": audit.get("hit_count"),
                 "filter_hit_n": audit.get("hit_n"),
                 "filter_spread_pct": audit.get("avg_spread"),
+                "filter_spread_n": audit.get("avg_spread_n"),
+                "filter_spread_t_stat": audit.get("avg_spread_t_stat"),
+                "filter_spread_p_value": audit.get("avg_spread_p_value"),
+                "filter_positive_periods": audit.get("positive_periods"),
+                "filter_periods_tested": audit.get("periods_tested"),
                 "filter_hit_rate_pct": audit.get("hit_rate"),
                 "filter_hit_p_value": audit.get("hit_p_value"),
                 "note": "앱 화면 기본 조건. backtest-ksj와 유니버스/종목수/비용 정의가 다름",
@@ -233,6 +238,11 @@ def load_kq_app_rows() -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
                 "filter_hit_count": None,
                 "filter_hit_n": None,
                 "filter_spread_pct": None,
+                "filter_spread_n": None,
+                "filter_spread_t_stat": None,
+                "filter_spread_p_value": None,
+                "filter_positive_periods": None,
+                "filter_periods_tested": None,
                 "filter_hit_rate_pct": None,
                 "filter_hit_p_value": None,
                 "note": "앱 벤치마크",
@@ -260,6 +270,11 @@ def write_markdown(df: pd.DataFrame, overlay_report: dict[str, Any] | None) -> N
         "filter_hit_count",
         "filter_hit_n",
         "filter_spread_pct",
+        "filter_spread_n",
+        "filter_spread_t_stat",
+        "filter_spread_p_value",
+        "filter_positive_periods",
+        "filter_periods_tested",
         "filter_hit_rate_pct",
         "filter_hit_p_value",
     ]
@@ -302,6 +317,8 @@ def write_markdown(df: pd.DataFrame, overlay_report: dict[str, Any] | None) -> N
                     f"제외 {audit.get('n_excluded')}개, "
                     f"대체 {audit.get('n_replacements')}개, "
                     f"대체-제외 {audit.get('avg_spread')}%p, "
+                    f"격차 t={audit.get('avg_spread_t_stat')}, p={audit.get('avg_spread_p_value')}, "
+                    f"구간+ {audit.get('positive_periods')}/{audit.get('periods_tested')}, "
                     f"Hit {audit.get('hit_count')}/{audit.get('hit_n')} "
                     f"({audit.get('hit_rate')}%, p={audit.get('hit_p_value')})"
                 )
@@ -316,6 +333,11 @@ def write_markdown(df: pd.DataFrame, overlay_report: dict[str, Any] | None) -> N
         "`backtest-ksj`는 별도 검증 엔진으로 사전 고정 모멘텀/위험회피 규칙의 "
         "구간별 강건성을 점검한다. 두 결과는 같은 결론을 강요하지 않고, "
         "서로 다른 검증 축으로 해석한다."
+    )
+    lines.append("")
+    lines.append(
+        "> 로보필터는 전 전략 일괄 적용이 아니라 제외 감사 지표로 적용 범위를 결정한다. "
+        "기여 증거가 확인될 때만 적용 후보로 두고, 증거가 없거나 평균 격차 방향이 음수면 기본값인 미적용을 유지한다."
     )
     out.write_text("\n".join(lines), encoding="utf-8")
 
