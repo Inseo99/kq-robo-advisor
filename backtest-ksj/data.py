@@ -6,6 +6,9 @@
   - data/cache/etf_assets_v2.parquet  (069500 = KODEX200, 2015-10~)
   - data/macro/kospi.csv  (2000~, 2015-10 이전 KODEX200 보강용)
   - backtest-ksj/data/vix.csv, credit_spread_us.csv  (사용자 제공, 없으면 None)
+  - backtest-ksj/data/market_2000_2026.csv  (ticker=sp500,vix / t1① S&P500, t1② VIX, kd200→sp500 대체 종목선정)
+  - backtest-ksj/data/liquidity_2000_2026.csv  (ticker=credit_spread / t1③)
+  - backtest-ksj/data/sector_etf_weekly_2018_2026.csv  (미국 섹터 ETF 27종, 주간, 종가만. mom20→us_sec 대체 종목선정)
 
 피벗 패널(date×ticker)은 backtest-ksj/data/에 parquet으로 캐시해 재실행을 가속한다.
 """
@@ -39,6 +42,25 @@ def load_adj_close() -> pd.DataFrame:
 
 def load_adj_open() -> pd.DataFrame:
     return _pivot_cached("수정시가")
+
+
+# ── 미국 섹터 ETF (주간, 시가 없음) ──────────────────────────────────────
+def load_sector_etf_weekly() -> pd.DataFrame | None:
+    """sector_etf_weekly_2018_2026.csv(long: date,ticker,value)를 date×ticker 피벗.
+
+    파일명과 달리 대부분 티커는 2014-01부터 존재(후발 상장 티커는 자연 편입,
+    PIT: momentum()/active_mask()가 상장 이전 NaN을 자동 제외해 생존편향 없음).
+    시가가 없어 종가만 사용(주간 단일값).
+    """
+    path = os.path.join(C.BT_DATA, "sector_etf_weekly_2018_2026.csv")
+    if not os.path.exists(path):
+        return None
+    df = pd.read_csv(path)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    df = df.dropna(subset=["date", "value"])
+    panel = df.pivot_table(index="date", columns="ticker", values="value", aggfunc="last")
+    return panel.sort_index()
 
 
 # ── 시가총액 PIT ─────────────────────────────────────────────────────────

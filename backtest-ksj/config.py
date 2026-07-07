@@ -23,8 +23,9 @@ BT_DATA = os.path.join(HERE, "data")          # 파생/외부 데이터 캐시 (
 RESULTS = os.path.join(HERE, "results")
 
 # ── 유니버스 / 종목선정 ──────────────────────────────────────────────────
-UNIVERSE_SIZE = 300          # PIT 시총 상위 N
-TOP_N = 20                   # 모멘텀 상위 보유 종목 수
+UNIVERSE_SIZE = 300          # PIT 시총 상위 N (mom20)
+TOP_N = 20                   # 모멘텀 상위 보유 종목 수 (mom20)
+TOP_N_US_SEC = 3             # 모멘텀 상위 보유 종목 수 (us_sec, 전체 유니버스 27종이라 상향선별 위해 축소, 2026-07-08 사용자 확정)
 MOM_LOOKBACK_M = 12          # 모멘텀 기준: t-12개월
 MOM_SKIP_M = 1               # 최근 1개월 제외 -> t-1개월
 MCAP_KEY = "시가총액(티커-상장예정주식수 포함)(백만원)"
@@ -69,9 +70,11 @@ BT_END = "2026-06-30"
 # ── 전략 정의 ────────────────────────────────────────────────────────────
 # variant:   s1(위험회피 없음) / s2(t1) / s3(t2)
 # cadence:   'M'(월간) / 'W'(주간)
-# selection: 'mom20'(12-1 모멘텀 상위20 동일가중) / 'kd200'(KODEX200 단일 보유)
+# selection: 'mom20'(12-1 모멘텀 상위20 동일가중, KR) / 'kd200'(KODEX200 단일 보유, KR)
+#            'us_sec'(12-1 모멘텀 상위3 동일가중, 미국 섹터ETF) / 'sp500'(S&P500 단일 보유, US)
+# us_sec/sp500은 t2 추세신호도 S&P500 기준(2026-07-08 사용자 확정), 실행은 지연없이 평가일 종가 즉시 진입
 STRATEGIES = [
-    # 종목선정 = 모멘텀20 (기존)
+    # 종목선정 = 모멘텀20 (기존, 국내)
     {"code": "s1m", "cadence": "M", "variant": "s1", "selection": "mom20", "label": "S1-월간 (모멘텀20)"},
     {"code": "s2m", "cadence": "M", "variant": "s2", "selection": "mom20", "label": "S2-월간 (+t1 위험회피)"},
     {"code": "s3m", "cadence": "M", "variant": "s3", "selection": "mom20", "label": "S3-월간 (+t2 추세추종)"},
@@ -85,10 +88,29 @@ STRATEGIES = [
     {"code": "s1w-kd200", "cadence": "W", "variant": "s1", "selection": "kd200", "label": "S1-주간 (KODEX200)"},
     {"code": "s2w-kd200", "cadence": "W", "variant": "s2", "selection": "kd200", "label": "S2-주간 (KODEX200 +t1)"},
     {"code": "s3w-kd200", "cadence": "W", "variant": "s3", "selection": "kd200", "label": "S3-주간 (KODEX200 +t2)"},
+    # 종목선정 = 미국 섹터ETF 모멘텀 상위3 동일가중
+    {"code": "s1m_us_sec", "cadence": "M", "variant": "s1", "selection": "us_sec", "label": "S1-월간 (미국섹터ETF)"},
+    {"code": "s2m_us_sec", "cadence": "M", "variant": "s2", "selection": "us_sec", "label": "S2-월간 (미국섹터ETF +t1)"},
+    {"code": "s3m_us_sec", "cadence": "M", "variant": "s3", "selection": "us_sec", "label": "S3-월간 (미국섹터ETF +t2)"},
+    {"code": "s1w_us_sec", "cadence": "W", "variant": "s1", "selection": "us_sec", "label": "S1-주간 (미국섹터ETF)"},
+    {"code": "s2w_us_sec", "cadence": "W", "variant": "s2", "selection": "us_sec", "label": "S2-주간 (미국섹터ETF +t1)"},
+    {"code": "s3w_us_sec", "cadence": "W", "variant": "s3", "selection": "us_sec", "label": "S3-주간 (미국섹터ETF +t2)"},
+    # 종목선정 = S&P500 단일 보유
+    {"code": "s1m-sp500", "cadence": "M", "variant": "s1", "selection": "sp500", "label": "S1-월간 (S&P500)"},
+    {"code": "s2m-sp500", "cadence": "M", "variant": "s2", "selection": "sp500", "label": "S2-월간 (S&P500 +t1)"},
+    {"code": "s3m-sp500", "cadence": "M", "variant": "s3", "selection": "sp500", "label": "S3-월간 (S&P500 +t2)"},
+    {"code": "s1w-sp500", "cadence": "W", "variant": "s1", "selection": "sp500", "label": "S1-주간 (S&P500)"},
+    {"code": "s2w-sp500", "cadence": "W", "variant": "s2", "selection": "sp500", "label": "S2-주간 (S&P500 +t1)"},
+    {"code": "s3w-sp500", "cadence": "W", "variant": "s3", "selection": "sp500", "label": "S3-주간 (S&P500 +t2)"},
 ]
 
-BENCHMARK_CODE = "069500"   # KODEX 200
+# 선정방식별 사용 벤치마크: mom20/kd200(국내) -> KODEX200 / us_sec/sp500(미국) -> S&P500
+SELECTION_BENCHMARK = {"mom20": "KR", "kd200": "KR", "us_sec": "US", "sp500": "US"}
+
+BENCHMARK_CODE = "069500"   # KODEX 200 (국내 벤치마크)
 BENCHMARK_LABEL = "KODEX 200 (벤치마크)"
+BENCHMARK_US_CODE = "SP500"   # S&P500 (미국 벤치마크, 2026-07-08 사용자 확정)
+BENCHMARK_US_LABEL = "S&P500 (미국 벤치마크)"
 
 # 연율화 계수
 PERIODS_PER_YEAR = {"M": 12, "W": 52}
