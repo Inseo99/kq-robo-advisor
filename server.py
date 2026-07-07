@@ -316,6 +316,12 @@ except Exception as _portfolio_mod_e:
     _kq_stock_analysis_to_asset_signal = None
 
 try:
+    from kq_tool.portfolio.profile_api import resolve_profile_request as _kq_resolve_profile_request
+except Exception as _profile_api_e:
+    print(f'  [module] risk profile API import 실패 - profile 메타데이터 생략: {_profile_api_e}')
+    _kq_resolve_profile_request = None
+
+try:
     from kq_tool.backtest.comparison import (
         build_quant_comparison_response as _kq_build_quant_comparison_response,
     )
@@ -2666,8 +2672,13 @@ def _apply_signal_tilt(weights, signal_map):
     return _normalize_weights(adjusted), multipliers
 
 
-def recommend_portfolio():
-    return _cached('recommend_portfolio', 300, _build_recommend_portfolio)
+def recommend_portfolio(profile_key=None):
+    payload = _cached('recommend_portfolio', 300, _build_recommend_portfolio)
+    if isinstance(payload, dict):
+        payload = dict(payload)
+        if _kq_resolve_profile_request is not None:
+            payload['profile'] = _kq_resolve_profile_request(profile_key)
+    return payload
 
 
 def _portfolio_order_price_lookup(ticker):

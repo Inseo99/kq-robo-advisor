@@ -96,7 +96,7 @@ def handle_legacy_get(
     stratbt: Callable[[object], object],
     macro_payload: object,
     regime_ai: Callable[[], object],
-    recommend_portfolio: Callable[[], object],
+    recommend_portfolio: Callable[..., object],
     market_report: Callable[[], object],
     health: Callable[[], object],
     portfolio_orders: Callable[..., object] | None = None,
@@ -133,7 +133,7 @@ def handle_legacy_get(
         regime_ai()
         return "regime_ai"
     if path == "/api/recommend_portfolio":
-        recommend_portfolio()
+        recommend_portfolio(str(query.get("profile", ["neutral"])[0]))
         return "recommend_portfolio"
     if path == "/api/portfolio_orders" and portfolio_orders is not None:
         def _qfloat(key, default):

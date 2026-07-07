@@ -76,7 +76,7 @@ def build_get_response(
     if path == "/api/regime_ai":
         return make_response("json", services["regime_ai"]())
     if path == "/api/recommend_portfolio":
-        return make_response("json", services["recommend_portfolio"]())
+        return make_response("json", services["recommend_portfolio"](_query_text(query, "profile", "neutral")))
     if path == "/api/portfolio_orders" and "portfolio_orders" in services:
         return make_response(
             "json",

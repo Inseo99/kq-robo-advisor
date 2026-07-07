@@ -527,6 +527,7 @@ let currentInd    = 'rsi';
 let macroLoaded   = false;
 let macroData     = null;
 let recommendData = null;
+let selectedProfile = 'neutral';
 let orderTicketData = null;
 let orderHoldingsText = '';
 let heatmapData   = null;
@@ -1845,12 +1846,66 @@ function renderStratBt(){
 }
 
 
+
+const PROFILE_DEFS = [
+  {key:'stable', label:'안정형'},
+  {key:'neutral', label:'중립형'},
+  {key:'aggressive', label:'공격형'},
+];
+
+function renderProfilePills(){
+  const box = el('profile-pills');
+  if(!box) return;
+  box.innerHTML = PROFILE_DEFS.map(p=>{
+    const on = p.key === selectedProfile;
+    return `<button onclick="selectProfile('${p.key}')" style="
+      font-size:11.5px;padding:4px 12px;border-radius:12px;cursor:pointer;
+      background:${on?'rgba(96,165,250,.15)':'transparent'};
+      color:${on?'var(--bl)':'var(--mu)'};
+      border:1px solid ${on?'var(--bl)':'var(--line, #26314d)'};
+      font-weight:${on?'700':'400'}">${p.label}</button>`;
+  }).join('');
+}
+
+function selectProfile(key){
+  selectedProfile = key;
+  recommendData = null;
+  orderTicketData = null;
+  renderProfilePills();
+  loadRecommendPortfolio(true);
+}
+
+function renderProfileNotice(profile){
+  let notice = el('profile-notice');
+  if(!notice){
+    const pills = el('profile-pills') || el('profile-selector');
+    if(!pills) return;
+    notice = document.createElement('div');
+    notice.id = 'profile-notice';
+    notice.style.cssText = 'font-size:11.5px;padding:7px 11px;border-radius:6px;margin:6px 0 8px;line-height:1.5';
+    (pills.closest('#profile-selector') || pills).insertAdjacentElement('afterend', notice);
+  }
+  if(!profile){ notice.style.display='none'; return; }
+  notice.style.display = 'block';
+  if(profile.demoted){
+    notice.style.background = 'rgba(251,191,36,.08)';
+    notice.style.border = '1px solid var(--yl)';
+    notice.style.color = 'var(--yl)';
+    notice.innerHTML = `<b>${profile.requested_label} 요청 → ${profile.applied_label} 적용</b><br><span style="color:var(--mu)">${profile.notice}</span>`;
+  }else{
+    notice.style.background = 'rgba(52,211,153,.06)';
+    notice.style.border = '1px solid var(--gr)';
+    notice.style.color = 'var(--gr)';
+    notice.textContent = profile.notice;
+  }
+}
+
 // ─── 추천 포트폴리오 ───────────────────────────────────────────────────────
 async function loadRecommendPortfolio(force=false){
   if(recommendData && !force){ renderRecommendPortfolio(); return; }
   overlay('추천 포트폴리오 계산 중...');
   try{
-    const r = await fetch('/api/recommend_portfolio');
+    const r = await fetch(`/api/recommend_portfolio?profile=${encodeURIComponent(selectedProfile)}`);
     if(!r.ok) throw new Error('서버 오류');
     recommendData = await r.json();
     if(recommendData.error) throw new Error(recommendData.error);
@@ -1893,6 +1948,12 @@ function renderRecommendPortfolio(){
     </div>` : '';
 
   let html = `
+    <div id="profile-selector" style="display:flex;align-items:center;gap:8px;margin:8px 0 8px">
+      <span style="font-size:12px;color:var(--mu)">투자성향</span>
+      <div style="display:flex;gap:4px" id="profile-pills"></div>
+    </div>
+    <div id="profile-notice" style="display:none;font-size:11.5px;padding:7px 11px;border-radius:6px;margin-bottom:8px;line-height:1.5"></div>
+
     <div style="background:#21262d;border-radius:8px;padding:12px;margin-bottom:12px">
       <div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">현재 추천 요약</div>
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
@@ -1964,6 +2025,8 @@ function renderRecommendPortfolio(){
     </div></div>`;
 
   el('rec-content').innerHTML = html;
+  renderProfilePills();
+  renderProfileNotice(d.profile);
 }
 
 function fmtWon(v){
