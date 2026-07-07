@@ -6,9 +6,10 @@
 
 - 기존 `server.py` + `index.html` 앱은 계속 실행 가능한 상태입니다.
 - 핵심 계산 로직은 `src/kq_tool` 패키지로 단계적으로 분리되어 있습니다.
-- 단위 테스트 기준: `tests/unit` 285개.
+- 단위 테스트 기준: `tests/unit` 333개.
 - 기본 회귀검증 스크립트: `RUN_REGRESSION_CHECKS.bat`.
 - 팀원 실행 스크립트: `RUN_KQ_TOOL.bat`.
+- 학술 검증 스크립트: `python tests\validation_factor_regression.py --model ff5 --top-n 500`.
 
 ## 실행 명령
 
@@ -63,7 +64,7 @@ python tests\smoke_api.py --include-stock --include-core --timeout 180
 - `/api/ping`, `/api/health` smoke 통과.
 - 데모 전 `/api/stock`, `/api/screen`, `/api/stratbt`, `/api/recommend_portfolio` smoke 통과.
   특히 `/api/stratbt?s=quant_compare`는 3자 비교 응답을 반환해야 함.
-- 브라우저에서 로보신호, 퀀트 스크리너, 전략검증, 추천 포트폴리오 탭이 열림.
+- 브라우저에서 로보신호, 퀀트 스크리너, 전략검증, 추천 포트폴리오, AI 시장 국면 탭이 열림.
 - 전략검증에서 `quant_compare` API 응답으로 퀀트(모멘텀), 퀀트(S2모멘텀), KOSPI 3자 비교가 표시됨.
 
 ## 핵심 설명 포인트
@@ -72,8 +73,11 @@ python tests\smoke_api.py --include-stock --include-core --timeout 180
 - 목적은 국면 필터, 정적/동적 자산배분, 로보신호, Alpha Decay를 결합해 손실 구간과 재점검 시점을 설명하는 것입니다.
 - 국면 모델은 초과수익 엔진이라기보다 자산배분 위험 상태와 재평가 트리거로 사용합니다.
 - Alpha Decay는 매수/매도 보장 신호가 아니라 신호 유효기간과 재점검 기간을 안내하는 보조 레이어입니다.
+- 국면별 Alpha Decay 검증은 같은 국면 안의 무작위 날짜와 실제 신호를 비교해, 국면 정보가 신호 유효기간 판단에 도움이 되는지 확인합니다.
+- 추천 포트폴리오는 검증 summary가 있고 placebo 반복 수가 충분할 때만 현재 국면의 신호 틸트 강도를 강화/약화하고, 파일이 없거나 smoke 수준이면 기존 중립 로직을 유지합니다.
 - 비용/슬리피지 반영 후에도 유효한 결과만 채택한다는 운영 기준을 둡니다.
 - S2 모멘텀은 최근 1개월을 제외한 12-1개월 모멘텀으로, 기존 최근 3개월 모멘텀과 별도로 검증합니다.
+- 보유한 시장시황/애널리스트 리포트는 AI 시장 국면 탭에서 파일 선택 또는 본문 붙여넣기로 등록하고, 스크롤 목록과 원문 링크로 확인합니다.
 
 ## 남은 선택 작업
 
@@ -81,6 +85,27 @@ python tests\smoke_api.py --include-stock --include-core --timeout 180
 - 발표용 슬라이드 또는 면접용 1페이지 요약 작성.
 - `server.py` HTTP handler를 더 얇게 만드는 추가 리팩토링.
 - FastAPI 전환은 선택 과제입니다. 현재 로컬 데모/팀원 실행에는 필수는 아닙니다.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -365,9 +365,9 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
         <span style="font-size:11px;color:var(--mu)">거래비용 bps:</span>
-        <input id="bt-cost-bps" class="num-input" type="number" min="0" step="1" value="0">
+        <input id="bt-cost-bps" class="num-input" type="number" min="0" step="1" value="10">
         <span style="font-size:11px;color:var(--mu);margin-left:6px">슬리피지 bps:</span>
-        <input id="bt-slip-bps" class="num-input" type="number" min="0" step="1" value="0">
+        <input id="bt-slip-bps" class="num-input" type="number" min="0" step="1" value="5">
       </div>
       <button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:10px" onclick="loadStratBt()">▶ 백테스트 실행</button>
       <div id="stratbt-content">
@@ -380,7 +380,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
   <div id="panel-macro" class="panel-content" style="display:none">
     <!-- 모델 상태 배지 -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--mu)">12년 한국 매크로 학습 (<span id="regime-samples">-</span>분기)</div>
+      <div style="font-size:11px;color:var(--mu)">2001~2026 PiT 매크로 라벨 (<span id="regime-samples">-</span>개월)</div>
       <div id="regime-model-badge" style="padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bl)22;color:var(--bl)">⏳</div>
     </div>
 
@@ -404,8 +404,32 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
 
     <!-- 다음 분기 전환 확률 -->
     <div class="section">
-      <div class="sec-head">다음 분기 전환 확률 <span style="color:var(--mu);font-weight:400">— HMM 12년 통계</span></div>
+      <div class="sec-head">다음 분기 전환 확률 <span style="color:var(--mu);font-weight:400">— P^3 전이행렬 (2001~2026)</span></div>
       <div id="next-quarter-bars"></div>
+    </div>
+
+    <!-- 시장시황보고서 보조 진단 -->
+    <div class="section">
+      <div class="sec-head">시장시황보고서 보조 진단 <span style="color:var(--mu);font-weight:400">— 정성 근거</span></div>
+      <div id="market-report-context" style="font-size:11px;line-height:1.55;color:var(--tx)">
+        <div style="color:var(--mu)">-</div>
+      </div>
+      <div style="margin-top:10px;border-top:1px solid var(--bd);padding-top:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <input id="mr-title" class="input" placeholder="보고서 제목" style="font-size:11px">
+          <input id="mr-source" class="input" placeholder="출처/증권사" style="font-size:11px">
+        </div>
+        <input id="mr-url" class="input" placeholder="원문 URL (선택)" style="font-size:11px;margin-bottom:6px">
+        <input id="mr-file" type="file" accept=".txt,.md,.csv,.html,.htm" onchange="readMarketReportFile(this)" style="width:100%;font-size:11px;color:var(--mu);margin-bottom:6px">
+        <textarea id="mr-text" class="input" placeholder="갖고 있는 시장시황보고서/애널리스트 리포트 본문을 붙여넣거나 파일을 선택하세요" style="height:86px;font-size:11px;line-height:1.5;resize:vertical;margin-bottom:6px"></textarea>
+        <div style="display:flex;gap:6px;align-items:center;justify-content:space-between">
+          <div id="mr-upload-status" style="font-size:10px;color:var(--mu)">등록하면 국면 보조 진단에 바로 반영됩니다.</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm" onclick="refreshMarketReport()">↻ 보고서 새로고침</button>
+            <button class="btn btn-sm primary" onclick="registerMarketReport()">＋ 보고서 등록</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 전환 매트릭스 -->
@@ -491,6 +515,7 @@ const SIGCOL = {'RSI 과매도':'#388bfd','MACD 골든크로스':'#3fb950','BB �
 function show(id,disp='block'){document.getElementById(id).style.display=disp}
 function hide(id){document.getElementById(id).style.display='none'}
 function el(id){return document.getElementById(id)}
+function esc(v){return String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function fmt(v,d=0){return v==null?'-':typeof v==='number'?v.toLocaleString('ko-KR',{maximumFractionDigits:d}):v}
 function overlay(msg=null){if(msg){el('ov-msg').textContent=msg;show('overlay','flex')}else hide('overlay')}
 function safeFileName(s){return String(s||'kq').replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,'_')}
@@ -1621,13 +1646,28 @@ function renderRecommendPortfolio(){
   const probs = reg.probs || {};
   const weights = d.assets || [];
   const topProb = reg.current && probs[reg.current] != null ? (probs[reg.current]*100).toFixed(1)+'%' : '-';
+  const regimeAlpha = d.construction?.regime_alpha_signal_adjustment || {};
+  const alphaScale = regimeAlpha.signal_tilt_scale != null ? Number(regimeAlpha.signal_tilt_scale).toFixed(2)+'x' : '-';
+  const alphaExcess = regimeAlpha.excess_pct != null ? Number(regimeAlpha.excess_pct).toFixed(2)+'%p' : '-';
+  const alphaLine = regimeAlpha.status ? `국면별 α Decay 검증: ${regimeAlpha.status} · 신호강도 ${alphaScale} · excess ${alphaExcess}` : '';
+  const reevalText = validity.reeval_flag === true ? '필요' : validity.reeval_flag === false ? '미발동' : '규칙 확인';
+  const shadow = d.shadow_ledger || reg.shadow_ledger || macroData?.ui_payload?.shadow_ledger || null;
+  const shadowBq = shadow?.band_vs_quarterly || {};
+  const shadowHtml = shadow ? `
+    <div class="section">
+      <div class="sec-head">리밸런싱 정책 자기검증</div>
+      <div style="background:#21262d;border-radius:6px;padding:9px;font-size:11px;line-height:1.7;color:var(--tx)">
+        <div><b>${shadow.period || '-'}</b> · 판정: <b style="color:var(--gr)">${shadowBq.verdict || '-'}</b></div>
+        <div style="color:var(--mu)">분기 캘린더 대비 절감 비용 ${shadowBq.cost_saved_pctp ?? '-'}%p · 성과차 ${shadowBq.cagr_gap_pctp ?? '-'}%p · 회전율 절감 ${shadowBq.turnover_saved_yr ?? '-'}x/년</div>
+      </div>
+    </div>` : '';
 
   let html = `
     <div style="background:#21262d;border-radius:8px;padding:12px;margin-bottom:12px">
       <div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">현재 추천 요약</div>
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
         <div style="font-size:20px;font-weight:800">${reg.current || '-'}</div>
-        <div style="font-size:12px;color:var(--mu)">신뢰도 ${topProb} · ${reg.model_type || '-'}</div>
+        <div style="font-size:12px;color:var(--mu)">신뢰도 ${topProb} · ${reg.method_label || reg.model_type || '-'}</div>
       </div>
       <div style="font-size:12px;line-height:1.6">${d.message || ''}</div>
     </div>
@@ -1636,9 +1676,10 @@ function renderRecommendPortfolio(){
       <div class="metric-card"><div class="metric-label">포트폴리오 유효기간</div><div class="metric-val">약 ${validity.valid_days || '-'}일</div></div>
       <div class="metric-card"><div class="metric-label">점검 주기</div><div class="metric-val" style="font-size:12px">${validity.rebalance || '-'}</div></div>
       <div class="metric-card"><div class="metric-label">동일 국면 유지확률</div><div class="metric-val">${validity.next_same_regime_prob ?? '-'}%</div></div>
-      <div class="metric-card"><div class="metric-label">조기 재평가</div><div class="metric-val" style="font-size:11px">확률 60% 하회</div></div>
+      <div class="metric-card"><div class="metric-label">조기 재평가</div><div class="metric-val" style="font-size:11px">${reevalText}</div></div>
     </div>
 
+    ${shadowHtml}
     <div class="section">
       <div class="sec-head">완성형 포트폴리오 비중</div>
       <table class="sig-table">`;
@@ -1669,6 +1710,7 @@ function renderRecommendPortfolio(){
   html += `<div class="section"><div class="sec-head">구성 방식</div>
     <div style="font-size:11px;color:var(--mu);line-height:1.7;background:#21262d;border-radius:6px;padding:8px">
       ${d.construction?.method || ''}<br>
+      ${alphaLine ? alphaLine + '<br>' : ''}
       ${validity.review_rule || ''}<br>
       ${d.caveat || ''}
     </div></div>`;
@@ -1697,10 +1739,10 @@ function renderRegimeAI(d){
   // 모델 배지
   el('regime-samples').textContent = d.sample_count || 0;
   const badge = el('regime-model-badge');
-  badge.textContent = `Powered by ${d.model_type}`;
+  badge.textContent = d.method_label || `Powered by ${d.model_type}`;
   if(d.model_type === 'TabPFN'){
     badge.style.background = 'var(--pu)22'; badge.style.color = 'var(--pu)';
-  } else if(d.model_type === 'LightGBM'){
+  } else if(String(d.model_type || '').includes('LightGBM')){
     badge.style.background = 'var(--bl)22'; badge.style.color = 'var(--bl)';
   } else {
     badge.style.background = 'var(--mu)22'; badge.style.color = 'var(--mu)';
@@ -1789,12 +1831,15 @@ function renderRegimeAI(d){
     const fc = d.regime_desc?.[from]?.color || '#888';
     mhtml += `<tr><td style="color:${fc};font-weight:600;font-size:10px">${from.slice(0,4)}</td>`;
     order.forEach(to => {
-      const v = (tm[from]?.[to] || 0) * 100;
+      const cell = tm[from]?.[to];
+      const prob = (cell && typeof cell === 'object') ? Number(cell.prob || 0) : Number(cell || 0);
+      const display = (cell && typeof cell === 'object' && cell.display) ? cell.display : `${(prob * 100).toFixed(0)}%`;
+      const v = prob * 100;
       const tc = d.regime_desc?.[to]?.color || '#888';
       // 확률 강도에 따른 배경 투명도
       const bg = v > 0 ? `${tc}${Math.floor(Math.min(v*2.5, 99)).toString(16).padStart(2,'0')}` : 'transparent';
       const textCol = v >= 30 ? '#fff' : 'var(--tx)';
-      mhtml += `<td style="background:${bg};color:${textCol};text-align:center;font-weight:${v>=30?700:400};font-size:10px">${v.toFixed(0)}%</td>`;
+      mhtml += `<td style="background:${bg};color:${textCol};text-align:center;font-weight:${v>=30?700:400};font-size:9px">${display}</td>`;
     });
     mhtml += '</tr>';
   });
@@ -1816,6 +1861,107 @@ function renderRegimeAI(d){
     <tr><td style="color:var(--mu)">장단기 스프레드</td><td style="text-align:right;font-weight:600">${feat.spread?.toFixed(2)}%p</td></tr>
     <tr><td style="color:var(--mu)">USD 환율 변화</td><td style="text-align:right;font-weight:600;color:${feat.usd_change>=0?'var(--rd)':'var(--gr)'}">${(feat.usd_change*100).toFixed(2)}%</td></tr>
   `;
+  renderMarketReportContext(d.market_report, regime, d.regime_desc || {});
+}
+
+function renderMarketReportContext(report, currentRegime, regimeDesc){
+  const target = el('market-report-context');
+  if(!target) return;
+  const reports = Array.isArray(report?.reports) ? report.reports : [];
+  const reportsHtml = reports.length ? `
+    <div style="margin-top:8px">
+      <div style="font-size:10px;color:var(--mu);margin-bottom:4px">등록/수집 보고서 ${reports.length}건</div>
+      <div style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;background:#161b22">
+        ${reports.map((item, idx)=>{
+          const url = item.url || '';
+          const link = url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="color:var(--bl);font-size:10px">원문 열기</a>` : '<span style="color:var(--mu);font-size:10px">로컬 등록</span>';
+          return `<div style="padding:8px;border-bottom:${idx===reports.length-1?'0':'1px solid var(--bd)'}">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+              <div style="font-weight:700;font-size:11px">${esc(item.title || '제목 없음')}</div>
+              ${link}
+            </div>
+            <div style="font-size:10px;color:var(--mu);margin:2px 0 5px">${esc(item.source || item.source_path || '')}${item.published ? ' · '+esc(item.published) : ''}</div>
+            <div style="font-size:10.5px;line-height:1.5;color:var(--tx)">${esc(item.text || '')}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  if(!report || !report.available){
+    target.innerHTML = `<div style="color:var(--mu)">${esc(report?.summary || '시장시황보고서 보조 진단 없음')}</div>${reportsHtml}`;
+    return;
+  }
+  const dominant = report.dominant_regime || '-';
+  const rd = regimeDesc?.[dominant] || {};
+  const color = rd.color || (report.alignment === 'aligned' ? 'var(--gr)' : 'var(--yl)');
+  const alignText = report.alignment === 'aligned' ? '정량 국면과 일치' :
+                    report.alignment === 'diverged' ? `정량 국면(${currentRegime})과 차이` : '참고용';
+  const evidence = report.evidence?.[dominant] || [];
+  const rows = evidence.slice(0,3).map(x => `<li>${esc(x)}</li>`).join('');
+  target.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;align-items:center">
+      <div><b style="color:${color}">${esc(dominant)}</b> <span style="color:var(--mu)">정성 신뢰도 ${Number(report.confidence || 0).toFixed(1)}%</span></div>
+      <span class="tag" style="border-color:${color};color:${color}">${esc(alignText)}</span>
+    </div>
+    <div style="color:var(--mu);margin-bottom:6px">${esc(report.summary || '')}</div>
+    ${rows ? `<ul style="margin:0;padding-left:16px;color:var(--tx)">${rows}</ul>` : ''}
+    ${reportsHtml}
+  `;
+}
+
+async function readMarketReportFile(input){
+  const file = input?.files?.[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    el('mr-text').value = text;
+    if(!el('mr-title').value) el('mr-title').value = file.name.replace(/\.[^.]+$/, '');
+    el('mr-upload-status').textContent = `${file.name} 파일을 불러왔습니다.`;
+  }catch(e){
+    el('mr-upload-status').textContent = '파일을 읽지 못했습니다: '+e.message;
+  }
+}
+
+async function refreshMarketReport(){
+  const status = el('mr-upload-status');
+  if(status) status.textContent = '보고서 새로고침 중...';
+  try{
+    const r = await fetch('/api/market_report');
+    if(!r.ok) throw new Error('서버 오류');
+    const d = await r.json();
+    if(d.error) throw new Error(d.error);
+    if(macroData) macroData.market_report = d.market_report;
+    renderMarketReportContext(d.market_report, macroData?.current || macroData?.current_regime, macroData?.regime_desc || {});
+    if(status) status.textContent = '보고서가 갱신되었습니다.';
+  }catch(e){
+    if(status) status.textContent = '새로고침 실패: '+e.message;
+  }
+}
+
+async function registerMarketReport(){
+  const title = el('mr-title')?.value?.trim() || '사용자 등록 리포트';
+  const source = el('mr-source')?.value?.trim() || '사용자 등록';
+  const url = el('mr-url')?.value?.trim() || '';
+  const text = el('mr-text')?.value?.trim() || '';
+  const status = el('mr-upload-status');
+  if(!text){ if(status) status.textContent = '본문을 붙여넣거나 파일을 선택하세요.'; return; }
+  if(status) status.textContent = '보고서 등록 중...';
+  try{
+    const r = await fetch('/api/market_report', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title, source, url, text})
+    });
+    const d = await r.json();
+    if(!r.ok || d.error) throw new Error(d.error || '서버 오류');
+    el('mr-text').value = '';
+    el('mr-file').value = '';
+    if(macroData) macroData.market_report = d.market_report;
+    renderMarketReportContext(d.market_report, macroData?.current || macroData?.current_regime, macroData?.regime_desc || {});
+    if(status) status.textContent = `등록 완료: ${d.saved?.title || title}`;
+  }catch(e){
+    if(status) status.textContent = '등록 실패: '+e.message;
+  }
 }
 
 function renderRegimeFallback(d){
@@ -1826,6 +1972,7 @@ function renderRegimeFallback(d){
   el('regime-desc').textContent = d.current_hint || '';
   el('regime-model-badge').textContent = 'Rule-based';
   el('regime-prob-bars').innerHTML = '<div style="color:var(--mu);font-size:11px;text-align:center;padding:20px 0">학습된 모델 없음 — server.py를 재시작하세요</div>';
+  renderMarketReportContext(d.market_report, d.current, d.regime_desc || {});
 }
 
 // ─── 초기 로드 ────────────────────────────────────────────────────────────
@@ -1836,5 +1983,12 @@ window.addEventListener('load', ()=>{
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
 
 

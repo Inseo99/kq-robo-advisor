@@ -1,5 +1,6 @@
 ﻿"""API route helpers."""
 
+from .actions import run_json_service_action, run_stock_action, run_strategy_backtest_action
 from .dispatcher import (
     ApiResponse,
     apply_api_response,
@@ -17,10 +18,12 @@ from .health import (
 )
 from .http_response import (
     JSON_CONTENT_TYPE,
+    ResponseWriter,
     content_headers,
     cors_headers,
     error_payload,
     json_response_body,
+    make_response_writer,
     no_cache_headers,
     send_body_response,
     send_empty_response,
@@ -58,12 +61,13 @@ from .services import (
     missing_service_keys,
 )
 from .serialization import clean_json_value
-from .static_files import StaticFilePayload, read_static_file
+from .static_files import StaticFilePayload, read_static_file, serve_static_file
 
 __all__ = [
     "ApiResponse",
     "JSON_CONTENT_TYPE",
     "REQUIRED_SERVICE_KEYS",
+    "ResponseWriter",
     "StaticFilePayload",
     "StockParams",
     "StrategyBacktestParams",
@@ -90,19 +94,24 @@ __all__ = [
     "handle_dispatched_get_safely",
     "handle_legacy_get",
     "json_response_body",
+    "make_response_writer",
     "missing_service_keys",
     "no_cache_headers",
     "open_preferred_browser",
     "parse_stock_params",
     "parse_strategy_backtest_params",
     "read_static_file",
+    "run_json_service_action",
     "run_server_with_browser_policy",
+    "run_stock_action",
+    "run_strategy_backtest_action",
     "schedule_browser_open",
     "send_body_response",
     "send_empty_response",
     "send_headers",
     "send_json_action",
     "send_json_response",
+    "serve_static_file",
     "serve_until_interrupted",
     "server_ready_messages",
     "server_url",
@@ -110,6 +119,10 @@ __all__ = [
     "startup_intro_messages",
     "yfinance_status_messages",
 ]
+
+
+
+
 
 
 

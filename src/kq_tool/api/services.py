@@ -1,4 +1,4 @@
-"""Service registry helpers for API route dispatch."""
+﻿"""Service registry helpers for API route dispatch."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ REQUIRED_SERVICE_KEYS = (
     "stratbt",
     "regime_ai",
     "recommend_portfolio",
+    "market_report",
 )
 
 
@@ -43,6 +44,7 @@ def build_server_api_services(
     stratbt: Callable[..., object],
     regime_ai: Callable[[], object],
     recommend_portfolio: Callable[[], object],
+    market_report: Callable[[], object],
 ) -> dict[str, Callable[..., object]]:
     """Build the service registry used by the local server handler."""
 
@@ -55,4 +57,5 @@ def build_server_api_services(
         stratbt=stratbt,
         regime_ai=regime_ai,
         recommend_portfolio=recommend_portfolio,
+        market_report=market_report,
     )

@@ -1,0 +1,16 @@
+﻿[
+  {
+    "name": "Example public RSS",
+    "url": "https://example.com/rss.xml",
+    "kind": "rss",
+    "enabled": false,
+    "max_items": 5
+  },
+  {
+    "name": "Example public market commentary page",
+    "url": "https://example.com/market-commentary",
+    "kind": "html",
+    "enabled": false,
+    "max_items": 1
+  }
+]

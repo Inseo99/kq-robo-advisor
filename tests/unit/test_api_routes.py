@@ -30,6 +30,7 @@ def _services():
         },
         "regime_ai": lambda: {"regime": True},
         "recommend_portfolio": lambda: {"recommend": True},
+        "market_report": lambda: {"market_report": True},
     }
 
 
@@ -77,6 +78,9 @@ def test_build_get_response_routes_core_zero_arg_services() -> None:
     assert build_get_response("/api/screen", services, make_response=_make_response)["payload"] == {"screen": True}
     assert build_get_response("/api/backtest", services, make_response=_make_response)["payload"] == {"backtest": True}
     assert build_get_response("/api/regime_ai", services, make_response=_make_response)["payload"] == {"regime": True}
+    assert build_get_response("/api/market_report", services, make_response=_make_response)["payload"] == {
+        "market_report": True
+    }
     assert build_get_response("/api/recommend_portfolio", services, make_response=_make_response)["payload"] == {
         "recommend": True
     }

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from pathlib import Path
@@ -54,3 +54,14 @@ def test_screener_table_headers_keep_s2_after_reverse_dcf() -> None:
         "S2",
         "신호",
     ]
+
+def test_market_report_panel_supports_upload_and_scroll() -> None:
+    html = _index_html()
+
+    assert 'id="mr-file"' in html
+    assert 'id="mr-text"' in html
+    assert 'registerMarketReport()' in html
+    assert 'refreshMarketReport()' in html
+    assert 'max-height:220px;overflow-y:auto' in html
+    assert '/api/market_report' in html
+

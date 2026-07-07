@@ -14,13 +14,22 @@ validation_placebo.py — Placebo Test (무작위 종목 1,000회 시뮬레이�
 
 import os, sys, time
 os.environ.setdefault('KQ_DISABLE_TABPFN', '1')
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
+sys.path.insert(0, os.path.join(ROOT_DIR, 'src'))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from validation_core import prepare_bt_data, run_bt_core
+from kq_tool.data.gateway import stamp_results
 
 
 def run_placebo_test(data, n_iter=1000, top_n=5, rebalance='M', seed=42):
@@ -283,6 +292,8 @@ if __name__ == '__main__':
         save_data[f'{s}_placebo_sharpes'] = r['placebo']['sharpes']
         save_data[f'{s}_placebo_mdds'] = r['placebo']['mdds']
         save_data[f'{s}_cagr_percentile'] = r['cagr_percentile']
-    np.savez(save_path, **save_data)
+    np.savez(save_path, **stamp_results(save_data))
     print(f"\n💾 결과 저장: {save_path}")
+
+
 

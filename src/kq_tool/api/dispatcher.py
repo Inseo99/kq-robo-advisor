@@ -97,6 +97,7 @@ def handle_legacy_get(
     macro_payload: object,
     regime_ai: Callable[[], object],
     recommend_portfolio: Callable[[], object],
+    market_report: Callable[[], object],
     health: Callable[[], object],
 ) -> str:
     """Apply the legacy fallback GET route table through server callbacks."""
@@ -123,6 +124,9 @@ def handle_legacy_get(
     if path == "/api/macro":
         send_json(macro_payload, 200)
         return "macro"
+    if path == "/api/market_report":
+        send_json(market_report(), 200)
+        return "market_report"
     if path == "/api/regime_ai":
         regime_ai()
         return "regime_ai"
