@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -19,7 +20,18 @@ META_COMPONENTS = [
     {"name": "올웨더", "weight": 0.25, "reason": "채권 중심 방어 배분"},
 ]
 
-REGIME_TARGETS = {
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+REGIME_ERC_V1_WEIGHTS_PATH = PROJECT_ROOT / "data" / "analysis_outputs" / "regime_erc_v1_weights.csv"
+REGIME_ERC_V1_META_PATH = PROJECT_ROOT / "data" / "analysis_outputs" / "regime_erc_v1_meta.json"
+
+ASSET_CLASS_TO_ETF_SLEEVE = {
+    "stocks": {"069500.KS": 0.75, "229200.KS": 0.25},
+    "bonds": {"148070.KS": 0.70, "114260.KS": 0.30},
+    "gold": {"132030.KS": 1.0},
+    "cash": {"153130.KS": 1.0},
+}
+
+LEGACY_REGIME_TARGETS = {
     "골디락스": {
         "069500.KS": 0.45,
         "229200.KS": 0.15,
@@ -53,6 +65,94 @@ REGIME_TARGETS = {
         "132030.KS": 0.05,
     },
 }
+
+REGIME_TARGETS_SOURCE = {
+    "name": "legacy_handcrafted",
+    "label": "사전 고정 경제논리 국면표",
+    "method": "handcrafted regime sleeves",
+    "data_source": "legacy defaults",
+    "note": "ERC v1 산출물이 없거나 로드 실패 시 사용하는 보수적 fallback",
+}
+
+
+def _expand_asset_class_weights(class_weights: Mapping[str, object]) -> dict[str, float]:
+    """Expand 4-class ERC weights into the 7-ETF recommendation universe."""
+
+    expanded: dict[str, float] = {}
+    for asset_class, sleeve in ASSET_CLASS_TO_ETF_SLEEVE.items():
+        try:
+            value = float(class_weights.get(asset_class) or 0.0)
+        except Exception:
+            value = 0.0
+        if value <= 0:
+            continue
+        for ticker, sleeve_weight in sleeve.items():
+            expanded[ticker] = expanded.get(ticker, 0.0) + value * float(sleeve_weight)
+    return normalize_weights(expanded)
+
+
+def load_regime_erc_v1_targets(
+    weights_path: str | Path = REGIME_ERC_V1_WEIGHTS_PATH,
+    meta_path: str | Path = REGIME_ERC_V1_META_PATH,
+) -> tuple[dict[str, dict[str, float]], dict[str, object]]:
+    """Load ERC v1 regime targets and expand them to ETF-level weights.
+
+    ERC v1 is stored as four asset-class weights. The recommendation tab
+    trades ETFs, so this loader applies a fixed sleeve map:
+    stocks -> KODEX200/KOSDAQ150, bonds -> 10Y/3Y 국채, gold -> gold ETF,
+    cash -> short-duration bond ETF. TIGER 원유선물 is intentionally excluded
+    from v1 because the ERC artifact has no commodity/oil asset class.
+    """
+
+    path = Path(weights_path)
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    targets: dict[str, dict[str, float]] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            regime = str(row.get("") or row.get("regime") or row.get("국면") or "").strip()
+            if not regime:
+                continue
+            expanded = _expand_asset_class_weights(row)
+            if expanded:
+                targets[regime] = expanded
+    missing = set(LEGACY_REGIME_TARGETS) - set(targets)
+    if missing:
+        raise ValueError(f"ERC v1 regime targets missing: {sorted(missing)}")
+
+    meta: dict[str, object] = {}
+    meta_file = Path(meta_path)
+    if meta_file.exists():
+        try:
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
+    meta.update(
+        {
+            "name": "regime_erc_v1",
+            "label": "ERC v1 기준배분",
+            "weights_file": str(path.as_posix()),
+            "sleeve_map": ASSET_CLASS_TO_ETF_SLEEVE,
+            "note": (
+                str(meta.get("note") or "")
+                + " ETF 확장: stocks=KODEX200/KOSDAQ150 75/25, "
+                "bonds=10Y/3Y 70/30, gold=KODEX 골드선물, cash=KODEX 단기채권. "
+                "원유 ETF는 4자산 ERC v1에 원자재/원유 클래스가 없어 제외."
+            ).strip(),
+        }
+    )
+    return targets, meta
+
+
+try:
+    REGIME_TARGETS, REGIME_TARGETS_SOURCE = load_regime_erc_v1_targets()
+except Exception as _erc_v1_load_error:
+    REGIME_TARGETS = LEGACY_REGIME_TARGETS
+    REGIME_TARGETS_SOURCE = {
+        **REGIME_TARGETS_SOURCE,
+        "load_error": str(_erc_v1_load_error),
+    }
 
 REGIME_ALPHA_MIN_EVENTS = 50
 
@@ -494,7 +594,9 @@ def build_recommendation_report(
     base_pct = round((1.0 - regime_tilt) * 100, 0)
     tilt_pct = round(regime_tilt * 100, 0)
     regime_method = "P^3 전이확률 기대배분" if tea_payload else "확률가중 국면 틸트"
+    target_label = str(REGIME_TARGETS_SOURCE.get("label") or "국면 기준배분")
     method = f"안정성 검증 포트폴리오 앙상블 {base_pct:.0f}% + {regime_method} {tilt_pct:.0f}% + 로보/Alpha Decay 미세조정 + 리밸런싱: 밴드(±5%p/상대25%)·국면전환 70% 부분이동"
+    method += f" · 기준배분: {target_label}"
     if regime_alpha.get("status") not in (None, "자료없음", "중립"):
         method += " + 국면별 Alpha Decay 검증 조정"
 
@@ -514,6 +616,7 @@ def build_recommendation_report(
                 "P^3 전이행렬 기반 기대배분"
                 if tea_payload else "현재 국면 확률 70% + 다음 분기 국면 확률 30%"
             ),
+            "regime_target_source_detail": REGIME_TARGETS_SOURCE,
             "regime_target": {key: round(value * 100, 1) for key, value in regime_target.items()},
             "transition_expected_allocation": tea_payload,
             "pre_signal_weights": {

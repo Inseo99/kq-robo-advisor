@@ -240,7 +240,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
     <div class="score-big">
       <div class="score-num" id="r-score-num">-</div>
       <div style="color:var(--mu);font-size:11px;margin-top:2px">
-        신뢰도 가중 종합 스코어 <span class="tag" style="margin-left:4px">α Decay 적용</span>
+        신뢰도 가중 종합 스코어 <span class="tag" style="margin-left:4px">Alpha Decay 품질판정</span>
       </div>
       <div class="score-bar-wrap"><div class="score-fill" id="r-score-bar" style="width:50%;background:var(--yl)"></div></div>
       <div id="r-exit-row" style="margin-top:8px;font-size:11px;color:var(--mu);display:none">
@@ -249,7 +249,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
         <span id="r-exit-text"></span>
       </div>
       <div style="color:var(--mu);font-size:10px;margin-top:4px">
-        (참고: 반감기 미반영 단순 스코어 <span id="r-score-raw">-</span>)
+        (참고: 동일가중 단순 스코어 <span id="r-score-raw">-</span>)
       </div>
     </div>
     <div class="section">
@@ -1116,7 +1116,7 @@ function renderRobo(d){
     el('r-conf').style.color = r.confidence>=7?'var(--gr)':r.confidence>=5?'var(--yl)':'var(--rd)';
     const validDays = r.valid_days ?? r.exit_days;
     if(r.validity_basis === 'alpha_decay' && validDays!=null){
-      el('r-exit-text').innerHTML = `<strong style="color:var(--tx)">${validDays}일</strong> 유효 추정 <span style="color:var(--mu)">(Alpha Decay)</span>`;
+      el('r-exit-text').innerHTML = `<strong style="color:var(--tx)">${validDays}일</strong> 유효 추정 <span style="color:var(--mu)">(Alpha Decay 유효기간 표시용)</span>`;
     } else if(validDays!=null) {
       el('r-exit-text').innerHTML = `<strong style="color:var(--tx)">${validDays}일</strong> 내 재점검 <span style="color:var(--mu)">(반감기 미측정)</span>`;
     } else {
@@ -1873,6 +1873,10 @@ function renderRecommendPortfolio(){
   const weights = d.assets || [];
   const topProb = reg.current && probs[reg.current] != null ? (probs[reg.current]*100).toFixed(1)+'%' : '-';
   const regimeAlpha = d.construction?.regime_alpha_signal_adjustment || {};
+  const targetSource = d.construction?.regime_target_source_detail || {};
+  const targetSourceLine = targetSource.label
+    ? `기준배분: ${targetSource.label}${targetSource.method ? ' · '+targetSource.method : ''}${targetSource.data_source ? ' · '+targetSource.data_source : ''}`
+    : '';
   const alphaScale = regimeAlpha.signal_tilt_scale != null ? Number(regimeAlpha.signal_tilt_scale).toFixed(2)+'x' : '-';
   const alphaExcess = regimeAlpha.excess_pct != null ? Number(regimeAlpha.excess_pct).toFixed(2)+'%p' : '-';
   const alphaLine = regimeAlpha.status ? `국면별 α Decay 검증: ${regimeAlpha.status} · 신호강도 ${alphaScale} · excess ${alphaExcess}` : '';
@@ -1953,6 +1957,7 @@ function renderRecommendPortfolio(){
   html += `<div class="section"><div class="sec-head">구성 방식</div>
     <div style="font-size:11px;color:var(--mu);line-height:1.7;background:#21262d;border-radius:6px;padding:8px">
       ${d.construction?.method || ''}<br>
+      ${targetSourceLine ? targetSourceLine + '<br>' : ''}
       ${alphaLine ? alphaLine + '<br>' : ''}
       ${validity.review_rule || ''}<br>
       ${d.caveat || ''}
