@@ -35,6 +35,16 @@ def test_strategy_backtest_buttons_match_strategy_metadata_order() -> None:
     assert strategy_keys == [QUANT_COMPARE.key, QUANT.key, QUANT_S2.key, ROBO.key]
 
 
+def test_strategy_backtest_discloses_net_costs_and_robo_role() -> None:
+    html = _index_html()
+
+    assert "무위험수익률" in html
+    assert "비용 차감 후(net)" in html
+    assert "필터 기여도" in html
+    assert "ON은 같은 랭킹 후보" in html
+    assert "초기 워밍업 구간" in html
+
+
 def test_screener_table_headers_keep_s2_after_reverse_dcf() -> None:
     html = _index_html()
     match = re.search(r"let html=`<table class=\"screen-tbl\"><tr>(.*?)</tr>`;", html, re.S)

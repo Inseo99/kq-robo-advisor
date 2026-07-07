@@ -40,6 +40,10 @@ from kq_tool.validation.factor_analysis import (  # noqa: E402
     factor_regression_rows,
     run_factor_regressions,
 )
+from kq_tool.data.financial_pit import (  # noqa: E402
+    financial_wide_monthly,
+    latest_mcap_tickers_asof,
+)
 from validation_asset_allocation_v2 import (  # noqa: E402
     load_etf_data,
     run_phase1_all_portfolios,
@@ -57,20 +61,13 @@ def _ticker_norm(series: pd.Series) -> pd.Series:
     return series.astype(str).str.lstrip("A").str.zfill(6)
 
 
-def _latest_mcap_tickers(fin: pd.DataFrame, top_n: int | None) -> list[str]:
-    mcap = fin[fin["아이템명"] == MCAP_KEY].copy()
-    mcap["ticker"] = _ticker_norm(mcap["ticker"])
-    latest = (
-        mcap.sort_values("date")
-        .groupby("ticker")["value"]
-        .last()
-        .pipe(pd.to_numeric, errors="coerce")
-        .dropna()
-        .sort_values(ascending=False)
-    )
-    if top_n is not None and top_n > 0:
-        latest = latest.head(top_n)
-    return latest.index.tolist()
+def _latest_mcap_tickers(
+    fin: pd.DataFrame,
+    top_n: int | None,
+    *,
+    asof: str | None = None,
+) -> list[str]:
+    return latest_mcap_tickers_asof(fin, asof=asof, top_n=top_n)
 
 
 def _monthly_wide_from_long(
@@ -92,13 +89,7 @@ def _monthly_wide_from_long(
 
 
 def _monthly_fin_item(fin: pd.DataFrame, item: str, *, tickers: list[str]) -> pd.DataFrame:
-    sub = fin[fin["아이템명"] == item].copy()
-    sub["ticker"] = _ticker_norm(sub["ticker"])
-    sub = sub[sub["ticker"].isin(tickers)]
-    sub["date"] = pd.to_datetime(sub["date"])
-    sub["value"] = pd.to_numeric(sub["value"], errors="coerce")
-    wide = sub.pivot_table(index="date", columns="ticker", values="value", aggfunc="last")
-    return wide.resample("ME").last().ffill().sort_index()
+    return financial_wide_monthly(fin, item, tickers=tickers).sort_index()
 
 
 def build_korea_ff_factors(
@@ -118,7 +109,7 @@ def build_korea_ff_factors(
 
     fin = pd.read_parquet(fin_path)
     fin["date"] = pd.to_datetime(fin["date"])
-    tickers = _latest_mcap_tickers(fin, top_n)
+    tickers = _latest_mcap_tickers(fin, top_n, asof=end_date)
     if not tickers:
         raise RuntimeError("No market-cap tickers available for factor construction.")
 

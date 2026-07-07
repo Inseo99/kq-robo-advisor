@@ -33,6 +33,15 @@ def build_mcap_history(universe_dict, ticker_to_code_fn, fin_data,
     """모든 종목의 분기별 시총을 DataFrame으로 구성
     Returns: DataFrame, shape (날짜, 종목), value=시총
     """
+    src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+    from kq_tool.data.financial_pit import build_mcap_history_pit
+
+    return build_mcap_history_pit(
+        universe_dict, ticker_to_code_fn, fin_data, fin_tickers_cache
+    )
+
     mcap_key = '시가총액(티커-상장예정주식수 포함)(백만원)'
     mcap_series_dict = {}
 
@@ -173,17 +182,11 @@ def prepare_bt_data(universe_dict, ticker_to_code_fn,
     price_df = price_df[valid_cols]
     price_df = price_df.ffill().dropna(how='all')
 
-    # 4) KOSPI 벤치마크 (yfinance)
-    try:
-        import yfinance as yf
-        kdf = yf.download('^KS11', period='12y', progress=False, auto_adjust=False)
-        if isinstance(kdf.columns, pd.MultiIndex):
-            kdf.columns = kdf.columns.get_level_values(0)
-        kospi = kdf['Close'].dropna()
-        kospi = kospi[(kospi.index >= start_date) &
-                       (kospi.index <= (end_date or kospi.index[-1]))]
-    except Exception:
-        kospi = price_df.mean(axis=1).dropna()
+    # 4) KOSPI 벤치마크 (단일 게이트웨이, ECOS 수집본)
+    from kq_tool.data.gateway import get_kospi_benchmark
+    kospi = get_kospi_benchmark()
+    kospi = kospi[(kospi.index >= start_date) &
+                   (kospi.index <= (end_date or kospi.index[-1]))]
 
     # 5) 로보 사전계산 (RSI, MACD, MA)
     rsi_dict, macd_bull_dict, ma20_dict, ma60_dict = {}, {}, {}, {}
@@ -468,5 +471,6 @@ if __name__ == '__main__':
     print(f"  5회 평균: {np.mean(cagrs):.2f}%, 소요: {time.time()-t0:.1f}초")
 
     print(f"\n✅ Task 1 완료")
+
 
 

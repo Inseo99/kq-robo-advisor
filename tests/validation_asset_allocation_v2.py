@@ -1,4 +1,4 @@
-"""
+﻿"""
 validation_asset_allocation_v2.py — 본인 시스템의 10개 포트폴리오 12년 검증
 
 핵심:
@@ -31,13 +31,16 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # 상위 폴더 (kq_tool/) 도 path에 추가 - server.py import 위함
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
+sys.path.insert(0, os.path.join(ROOT_DIR, 'src'))
 
 # server.py의 핵심 함수/객체 활용
 import server
 from server import _gmv_weights, _mdp_weights, _erc_weights, ETFs, STRATEGIES
 
 from regime_pit import build_pit_macro_features, classify_regime_at
+from kq_tool.data.gateway import get_kospi_benchmark, load_close_panel
 
 
 # 캐시 경로
@@ -47,50 +50,30 @@ CACHE_FILE = os.path.join(
 )
 
 
+def _ticker_to_code(ticker):
+    return str(ticker).split('.', 1)[0]
+
+
 def load_etf_data(force_refresh=False):
-    """ETFs 7종 종가 데이터 (parquet 캐시).
-    server.py의 ETFs 목록 사용.
-    """
-    cache_path = os.path.abspath(CACHE_FILE)
-    cache_dir = os.path.dirname(cache_path)
-    os.makedirs(cache_dir, exist_ok=True)
-
-    if os.path.exists(cache_path) and not force_refresh:
-        print(f"  ETF 캐시 로드: {cache_path}")
-        df = pd.read_parquet(cache_path)
-        df.index = pd.to_datetime(df.index)
-        return df
-
-    # yfinance 다운로드
-    print(f"  yfinance에서 ETF {len(ETFs)}종 다운로드 중...")
-    import yfinance as yf
+    """ETFs 7종 종가 데이터 - 단일 게이트웨이 수정주가 패널."""
+    panel = load_close_panel()
     closes = {}
     for ticker in ETFs:
-        try:
-            ydf = yf.download(ticker, period='12y', progress=False, auto_adjust=False)
-            if isinstance(ydf.columns, pd.MultiIndex):
-                ydf.columns = ydf.columns.get_level_values(0)
-            closes[ticker] = ydf['Close'].dropna()
-            print(f"    {ticker}: {len(closes[ticker])}행")
-        except Exception as e:
-            print(f"    {ticker}: 실패 ({e})")
-
-    # 공통 기간만 남기기
-    df = pd.DataFrame(closes).dropna(how='all')
-    # 모든 ETF가 데이터 있는 날짜만 (보수적)
-    df = df.dropna()
-    df.to_parquet(cache_path)
-    print(f"  ETF 캐시 저장: {cache_path} ({len(df)}행, {len(df.columns)}종)")
+        code = _ticker_to_code(ticker)
+        if code in panel.columns:
+            closes[ticker] = pd.to_numeric(panel[code], errors='coerce').dropna()
+            print(f"    {ticker}: {len(closes[ticker])}행 (gateway)")
+        else:
+            print(f"    {ticker}: close.csv에 없음")
+    df = pd.DataFrame(closes).dropna(how='all').dropna()
+    if df.empty:
+        raise RuntimeError('ETF 수정주가 패널 로드 실패')
     return df
 
 
 def load_kospi_data():
-    """KOSPI 지수 데이터 (벤치마크)"""
-    import yfinance as yf
-    df = yf.download('^KS11', period='12y', progress=False, auto_adjust=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    return df['Close'].dropna()
+    """KOSPI 지수 데이터 (단일 게이트웨이 ECOS 수집본)."""
+    return get_kospi_benchmark()
 
 
 def compute_dynamic_weights(price_df, strategy_name, lookback_days=252):
@@ -652,3 +635,4 @@ if __name__ == '__main__':
         load_etf_data(force_refresh=True)
 
     run_full_validation(n_placebo=args.n)
+

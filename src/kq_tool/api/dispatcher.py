@@ -99,6 +99,8 @@ def handle_legacy_get(
     recommend_portfolio: Callable[[], object],
     market_report: Callable[[], object],
     health: Callable[[], object],
+    portfolio_orders: Callable[..., object] | None = None,
+    return_heatmap: Callable[..., object] | None = None,
 ) -> str:
     """Apply the legacy fallback GET route table through server callbacks."""
 
@@ -133,6 +135,29 @@ def handle_legacy_get(
     if path == "/api/recommend_portfolio":
         recommend_portfolio()
         return "recommend_portfolio"
+    if path == "/api/portfolio_orders" and portfolio_orders is not None:
+        def _qfloat(key, default):
+            try:
+                return float(query.get(key, [default])[0])
+            except (TypeError, ValueError):
+                return default
+        send_json(
+            portfolio_orders(
+                _qfloat("amount", 10000000.0),
+                _qfloat("tc", 10.0),
+                _qfloat("slip", 5.0),
+                str(query.get("holdings", [""])[0]),
+            ),
+            200,
+        )
+        return "portfolio_orders"
+    if path == "/api/return_heatmap" and return_heatmap is not None:
+        try:
+            limit = int(float(query.get("limit", [36])[0]))
+        except (TypeError, ValueError):
+            limit = 36
+        send_json(return_heatmap(limit), 200)
+        return "return_heatmap"
     if path == "/api/health":
         send_json(health(), 200)
         return "health"

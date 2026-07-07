@@ -168,6 +168,7 @@ try:
     from kq_tool.data.fundamental import (
         excel_fundamental_info as _kq_excel_fundamental_info,
         has_yfinance_fundamental_info as _kq_has_yfinance_fundamental_info,
+        refresh_market_sensitive_fundamentals as _kq_refresh_market_sensitive_fundamentals,
         sample_fundamental_info as _kq_sample_fundamental_info,
     )
     _KQ_DATA_HELPERS_READY = True
@@ -193,6 +194,7 @@ except Exception as _data_mod_e:
     _kq_market_counts = None
     _kq_excel_fundamental_info = None
     _kq_has_yfinance_fundamental_info = None
+    _kq_refresh_market_sensitive_fundamentals = None
     _kq_sample_fundamental_info = None
 
 _LEGACY_PERIOD_DAYS = {
@@ -338,7 +340,10 @@ try:
     from kq_tool.backtest.strategy_meta import (
         QUANT as _KQ_QUANT,
         QUANT_COMPARE as _KQ_QUANT_COMPARE,
+        QUANT_ROBO_FILTER as _KQ_QUANT_ROBO_FILTER,
         QUANT_S2 as _KQ_QUANT_S2,
+        QUANT_S2_ROBO_FILTER as _KQ_QUANT_S2_ROBO_FILTER,
+        ROBO as _KQ_ROBO,
         strategy_descriptor as _kq_strategy_descriptor,
     )
     _KQ_BACKTEST_HELPERS_READY = True
@@ -358,7 +363,10 @@ except Exception as _backtest_mod_e:
     _kq_build_quant_comparison_response = None
     _KQ_QUANT = None
     _KQ_QUANT_COMPARE = None
+    _KQ_QUANT_ROBO_FILTER = None
     _KQ_QUANT_S2 = None
+    _KQ_QUANT_S2_ROBO_FILTER = None
+    _KQ_ROBO = None
     _kq_strategy_descriptor = None
 
 try:
@@ -805,27 +813,8 @@ def _dl(ticker, period='1y'):
                 return df, False
         except Exception as e:
             pass
-
-    # 2) yfinance fallback — UNIVERSE에 없는 티커만 시도 (ETF, KOSPI 지수 등)
-    #    개별 종목(KOSPI/KOSDAQ)은 엑셀이 우선이므로 여기 도달 시 fallback 없이 종료
-    if ticker not in UNIVERSE:
-        _ensure_yf_session()
-        try:
-            import yfinance as yf
-            df = _yf_retry(lambda: yf.download(ticker, period=period, progress=False, auto_adjust=False), tries=1)
-            if df is not None and not df.empty:
-                if _kq_prepare_yfinance_price_frame is not None:
-                    prepared = _kq_prepare_yfinance_price_frame(df, period)
-                    if prepared is not None:
-                        return prepared, False
-                else:
-                    if isinstance(df.columns, pd.MultiIndex):
-                        df.columns = df.columns.get_level_values(0)
-                    if len(df) >= (1 if period == '1d' else 20):
-                        return df, False
-        except Exception:
-            pass
-
+
+    # 2) 단일 게이트웨이 원칙: 실시간 yfinance fallback 금지
     # 3) 샘플 데이터
     if ticker not in _warned_tickers:
         _warned_tickers.add(ticker)
@@ -840,27 +829,32 @@ def _c(df):
     if isinstance(c, pd.DataFrame): c = c.iloc[:,0]
     return c.squeeze()
 
-def _fund_info(ticker):
-    """재무 정보 조회 — 엑셀 데이터 우선, 없으면 yfinance"""
+def _fund_info(ticker, asof=None):
+    """재무 정보 조회 — PiT 엑셀 데이터 우선, 없으면 yfinance"""
     # 1) 엑셀 재무 데이터 우선
     if EXCEL_FIN is not None:
         code = _ticker_to_code(ticker)
         if code in _dl_mod._FIN_TICKERS_CACHE:
             try:
-                latest = _dl_mod.get_latest_fin(EXCEL_FIN, code)
+                latest = _dl_mod.get_latest_fin_asof(EXCEL_FIN, code, asof=asof)
                 if latest:
+                    def _fast_metric(metric):
+                        if os.environ.get('KQ_ENABLE_METRIC_PARQUET') == '1':
+                            return _dl_mod.get_metric_value(code, metric)
+                        return None
+
                     if _KQ_DATA_HELPERS_READY:
                         info = _kq_excel_fundamental_info(
                             latest,
-                            lambda metric: _dl_mod.get_metric_value(code, metric),
+                            _fast_metric,
                         )
                         return info, False
                     # 엑셀 메트릭 시트에서 PER·PBR·EPS·BPS 직접 조회 (있으면 우선)
-                    pe_metric  = _dl_mod.get_metric_value(code, 'per')
-                    pbr_metric = _dl_mod.get_metric_value(code, 'pbr')
-                    eps_metric = _dl_mod.get_metric_value(code, 'eps')
-                    bps_metric = _dl_mod.get_metric_value(code, 'bps')
-                    div_yield  = _dl_mod.get_metric_value(code, 'div_yield')
+                    pe_metric  = _fast_metric('per')
+                    pbr_metric = _fast_metric('pbr')
+                    eps_metric = _fast_metric('eps')
+                    bps_metric = _fast_metric('bps')
+                    div_yield  = _fast_metric('div_yield')
 
                     # 재무 데이터에서 백업 계산
                     mcap_mil = latest.get('시가총액(티커-상장예정주식수 포함)(백만원)', 0)
@@ -878,12 +872,19 @@ def _fund_info(ticker):
                         trailingPE      = pe_metric  if pe_metric  and 0<pe_metric<200  else (round(pe_calc,2) if pe_calc and 0<pe_calc<200 else None),
                         priceToBook     = pbr_metric if pbr_metric and 0<pbr_metric<30 else (round(pbr_calc,2) if pbr_calc and 0<pbr_calc<30 else None),
                         returnOnEquity  = round(roe,4),
+                        returnOnEquity_basis = 'pit_snapshot',
                         marketCap       = market_cap if market_cap>0 else None,
+                        marketCap_basis = 'pit_financial_snapshot',
+                        fundamentalPeriodDate = latest.get('__latest_period_date'),
+                        fundamentalObservableDate = latest.get('__latest_observable_date'),
+                        fundamentalSource = 'excel_pit',
                         beta            = 1.0,
                         currentPrice    = None,
                         trailingEps     = round(eps_metric) if eps_metric else (round(eps_calc) if eps_calc else None),
                         freeCashflow    = latest.get('영업활동으로인한현금흐름(천원)', 0) * 1000,
                         sharesOutstanding = shares,
+                        equity          = equity if equity > 0 else None,
+                        netIncomeTTM    = (net_income * 4) if net_income > 0 else None,
                         bookValue       = bps_metric,
                         dividendYield   = (div_yield/100) if div_yield else None,
                     )
@@ -891,20 +892,22 @@ def _fund_info(ticker):
             except Exception as e:
                 pass
 
-    # 2) yfinance fallback
-    _ensure_yf_session()
-    try:
-        import yfinance as yf
-        info = _yf_retry(lambda: yf.Ticker(ticker).info, tries=2)
-        has_info = (
-            _kq_has_yfinance_fundamental_info(info)
-            if _kq_has_yfinance_fundamental_info is not None
-            else bool(info and info.get('trailingPE'))
-        )
-        if has_info:
-            return info, False
-    except Exception:
-        pass
+    # 2) yfinance fallback은 명시 opt-in일 때만 사용한다.
+    # 네트워크가 느리거나 막힌 환경에서 단일 종목 분석 화면이 멈추는 것을 방지한다.
+    if os.environ.get('KQ_ENABLE_LIVE_YF') == '1':
+        _ensure_yf_session()
+        try:
+            import yfinance as yf
+            info = _yf_retry(lambda: yf.Ticker(ticker).info, tries=1)
+            has_info = (
+                _kq_has_yfinance_fundamental_info(info)
+                if _kq_has_yfinance_fundamental_info is not None
+                else bool(info and info.get('trailingPE'))
+            )
+            if has_info:
+                return info, False
+        except Exception:
+            pass
     return _sfund(ticker), True
 
 # ── 기술적 지표 ──────────────────────────────────────────────────────────
@@ -950,28 +953,29 @@ def _analyze_stock(ticker, period='1y'):
         cur_source = '엑셀'
         cur_date = c.index[-1].strftime('%Y-%m-%d')
         live_price = None
-        try:
-            _ensure_yf_session()
-            import yfinance as yf
-            t_obj = yf.Ticker(ticker)
-            live_info = _yf_retry(lambda: t_obj.info, tries=2)
-            if _kq_resolve_current_price_context is not None:
-                context = _kq_resolve_current_price_context(c.index, live_info)
-                live_price = context.get('price')
-                cur_source = context.get('source') or cur_source
-                cur_date = context.get('date') or cur_date
-            else:
-                if _kq_extract_live_price is not None:
-                    live_price = _kq_extract_live_price(live_info)
-                elif isinstance(live_info, dict):
-                    live_price = (live_info.get('currentPrice')
-                                  or live_info.get('regularMarketPrice')
-                                  or live_info.get('previousClose'))
-                if live_price and live_price > 0:
-                    cur_source = '실시간'
-                    cur_date = pd.Timestamp.now().strftime('%Y-%m-%d')
-        except Exception:
-            live_price = None
+        if os.environ.get('KQ_ENABLE_LIVE_YF') == '1':
+            try:
+                _ensure_yf_session()
+                import yfinance as yf
+                t_obj = yf.Ticker(ticker)
+                live_info = _yf_retry(lambda: t_obj.info, tries=1)
+                if _kq_resolve_current_price_context is not None:
+                    context = _kq_resolve_current_price_context(c.index, live_info)
+                    live_price = context.get('price')
+                    cur_source = context.get('source') or cur_source
+                    cur_date = context.get('date') or cur_date
+                else:
+                    if _kq_extract_live_price is not None:
+                        live_price = _kq_extract_live_price(live_info)
+                    elif isinstance(live_info, dict):
+                        live_price = (live_info.get('currentPrice')
+                                      or live_info.get('regularMarketPrice')
+                                      or live_info.get('previousClose'))
+                    if live_price and live_price > 0:
+                        cur_source = '실시간'
+                        cur_date = pd.Timestamp.now().strftime('%Y-%m-%d')
+            except Exception:
+                live_price = None
 
         name = (UNIVERSE.get(ticker) or ETFs.get(ticker) or (ticker,'?'))[0]
         return _kq_analyze_stock_payload(
@@ -1043,33 +1047,36 @@ def _analyze_stock(ticker, period='1y'):
     cur_source = '엑셀'   # 가격 출처 표기
     cur_date   = c.index[-1].strftime('%Y-%m-%d')
 
-    # ── yfinance 실시간 현재가 시도 (실패 시 엑셀 폴백) ──────────────────
-    try:
-        _ensure_yf_session()
-        import yfinance as yf
-        t_obj = yf.Ticker(ticker)
-        live_info = _yf_retry(lambda: t_obj.info, tries=2)
-        live_price = None
-        if _kq_resolve_current_price_context is not None:
-            context = _kq_resolve_current_price_context(c.index, live_info)
-            live_price = context.get('price')
-        elif _kq_extract_live_price is not None:
-            live_price = _kq_extract_live_price(live_info)
-        elif isinstance(live_info, dict):
-            live_price = (live_info.get('currentPrice')
-                          or live_info.get('regularMarketPrice')
-                          or live_info.get('previousClose'))
-        if live_price and live_price > 0:
-            cur = float(live_price)
-            chg = (cur - prev) / prev * 100
+    # ── 실시간 현재가 opt-in ───────────────────────────────────────────────
+    # 기본값은 검증 관문을 통과한 수정주가 패널 최신값이다.
+    # yfinance .info는 네트워크가 느릴 때 UI를 멈출 수 있으므로 명시 opt-in일 때만 호출한다.
+    if os.environ.get('KQ_ENABLE_LIVE_YF') == '1':
+        try:
+            _ensure_yf_session()
+            import yfinance as yf
+            t_obj = yf.Ticker(ticker)
+            live_info = _yf_retry(lambda: t_obj.info, tries=1)
+            live_price = None
             if _kq_resolve_current_price_context is not None:
-                cur_source = context.get('source') or '실시간'
-                cur_date = context.get('date') or cur_date
-            else:
-                cur_source = '실시간'
-                cur_date = pd.Timestamp.now().strftime('%Y-%m-%d')
-    except Exception:
-        pass
+                context = _kq_resolve_current_price_context(c.index, live_info)
+                live_price = context.get('price')
+            elif _kq_extract_live_price is not None:
+                live_price = _kq_extract_live_price(live_info)
+            elif isinstance(live_info, dict):
+                live_price = (live_info.get('currentPrice')
+                              or live_info.get('regularMarketPrice')
+                              or live_info.get('previousClose'))
+            if live_price and live_price > 0:
+                cur = float(live_price)
+                chg = (cur - prev) / prev * 100
+                if _kq_resolve_current_price_context is not None:
+                    cur_source = context.get('source') or '실시간'
+                    cur_date = context.get('date') or cur_date
+                else:
+                    cur_source = '실시간'
+                    cur_date = pd.Timestamp.now().strftime('%Y-%m-%d')
+        except Exception:
+            pass
 
     rv    = float(r14.iloc[-1])  if pd.notna(r14.iloc[-1])  else 50.
     macd_v= float(ml.iloc[-1])   if pd.notna(ml.iloc[-1])   else 0.
@@ -1113,6 +1120,11 @@ def _analyze_stock(ticker, period='1y'):
     cw = _confidence_weighted_robo(ad, s_rsi, s_macd, s_bb, s_ma20, s_ma60)
 
     # 재무
+    if (
+        _kq_refresh_market_sensitive_fundamentals is not None
+        and isinstance(info, dict)
+    ):
+        info = _kq_refresh_market_sensitive_fundamentals(info, cur, cur_date)
     pe   = info.get('trailingPE')  if isinstance(info,dict) else None
     pbr  = info.get('priceToBook') if isinstance(info,dict) else None
     roe  = info.get('returnOnEquity') if isinstance(info,dict) else None
@@ -1136,11 +1148,23 @@ def _analyze_stock(ticker, period='1y'):
                   rr=round(2/(1.5),2),
                   cw_score=cw['score'], cw_signal=cw['signal'],
                   confidence=cw['confidence'], exit_days=cw['exit_days'],
+                  decay_state=cw.get('decay_state'),
                   valid_days=cw.get('valid_days'), validity_basis=cw.get('validity_basis'),
                   validity_text=cw.get('validity_text'),
                   cw_detail=cw['detail']),
         alpha=ad,
-        fund=dict(pe=pe,pbr=pbr,roe=roe,mcap=mcap),
+        fund=dict(
+            pe=pe,pbr=pbr,roe=roe,mcap=mcap,
+            source=info.get('fundamentalSource') if isinstance(info,dict) else None,
+            note=info.get('fundamental_note') if isinstance(info,dict) else None,
+            marketCap_basis=info.get('marketCap_basis') if isinstance(info,dict) else None,
+            marketCap_date=info.get('marketCap_date') if isinstance(info,dict) else None,
+            pe_basis=info.get('trailingPE_basis') if isinstance(info,dict) else None,
+            pbr_basis=info.get('priceToBook_basis') if isinstance(info,dict) else None,
+            roe_basis=info.get('returnOnEquity_basis') if isinstance(info,dict) else None,
+            fundamental_period_date=info.get('fundamentalPeriodDate') if isinstance(info,dict) else None,
+            fundamental_observable_date=info.get('fundamentalObservableDate') if isinstance(info,dict) else None,
+        ),
     )
 
 # ── Alpha Decay (단일 종목) ──────────────────────────────────────────────
@@ -1414,28 +1438,13 @@ def run_screener():
     return _cached('screener', 1800, _run_screener)
 
 def _prewarm_screener_cache():
-    """스크리너 병렬 실행 전 필요한 parquet 캐시를 한 번만 로드한다."""
-    if '_dl_mod' not in globals():
-        return
-    price_sheets = getattr(_dl_mod, 'PRICE_SHEETS', {})
-    metric_sheets = getattr(_dl_mod, 'METRIC_SHEETS', {})
-    if _kq_prewarm_screener_cache is not None:
-        _kq_prewarm_screener_cache(_dl_mod._load_price_parquet, price_sheets, metric_sheets)
-        return
-    for kind in ('open', 'high', 'low', 'close', 'volume'):
-        fname = price_sheets.get(kind)
-        if fname:
-            try:
-                _dl_mod._load_price_parquet(fname)
-            except Exception:
-                pass
-    for metric in ('per', 'pbr', 'eps', 'bps', 'div_yield'):
-        fname = metric_sheets.get(metric)
-        if fname:
-            try:
-                _dl_mod._load_price_parquet(fname)
-            except Exception:
-                pass
+    """스크리너는 app_data 수정주가 패널을 우선 사용한다.
+
+    구 price parquet prewarm은 검증-앱 데이터 불일치의 재발 경로라 제거했다.
+    재무 metric parquet는 _fund_info/get_metric_value 호출 시 필요한 만큼만 lazy-load 한다.
+    """
+    return
+
 
 def _fetch_one(ticker):
     try:
@@ -1479,20 +1488,7 @@ def _run_screener():
             price_date = _kq_app_latest_price_date()
         except Exception:
             price_date = None
-    if price_date is None:
-        try:
-            _dl_mod._load_price_parquet('price_종가.parquet')
-            close_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
-            close_groups = _dl_mod._PRICE_GROUPS.get(close_path, {})
-            if _kq_latest_price_date_from_groups is not None:
-                price_date = _kq_latest_price_date_from_groups(close_groups)
-            else:
-                last_dates = [s.dropna().index[-1] for s in close_groups.values()
-                              if s is not None and len(s.dropna()) > 0]
-                if last_dates:
-                    price_date = max(last_dates).strftime('%Y-%m-%d')
-        except Exception:
-            price_date = None
+    # price_date는 app_data 수정주가 패널에서만 가져온다. legacy parquet fallback 금지.
 
     # 시가총액 상위 종목 사용 (스크리너 + 백테스트 일관성)
     candidates = get_top_marketcap_tickers()
@@ -1880,14 +1876,24 @@ def run_strategy_backtest(
 
 def _run_quant_comparison_backtest(top_n, rebalance, period, transaction_cost_bps=0.0, slippage_bps=0.0):
     quant_key = _strategy_key(_KQ_QUANT, 'quant')
+    quant_on_key = _strategy_key(_KQ_QUANT_ROBO_FILTER, 'quant_robo_filter')
     quant_s2_key = _strategy_key(_KQ_QUANT_S2, 'quant_s2')
+    quant_s2_on_key = _strategy_key(_KQ_QUANT_S2_ROBO_FILTER, 'quant_s2_robo_filter')
     quant_label = (
         _kq_strategy_descriptor(quant_key).label
         if _kq_strategy_descriptor is not None else '퀀트(모멘텀)'
     )
+    quant_on_label = (
+        _kq_strategy_descriptor(quant_on_key).label
+        if _kq_strategy_descriptor is not None else '퀀트+로보필터'
+    )
     quant_s2_label = (
         _kq_strategy_descriptor(quant_s2_key).label
         if _kq_strategy_descriptor is not None else '퀀트(S2모멘텀)'
+    )
+    quant_s2_on_label = (
+        _kq_strategy_descriptor(quant_s2_on_key).label
+        if _kq_strategy_descriptor is not None else 'S2+로보필터'
     )
     momentum = run_strategy_backtest(
         quant_key, top_n, rebalance, period, transaction_cost_bps, slippage_bps
@@ -1895,20 +1901,34 @@ def _run_quant_comparison_backtest(top_n, rebalance, period, transaction_cost_bp
     if momentum.get('error'):
         return {'error': f"{quant_label}: {momentum.get('error')}"}
 
+    momentum_on = run_strategy_backtest(
+        quant_on_key, top_n, rebalance, period, transaction_cost_bps, slippage_bps
+    )
+    if momentum_on.get('error'):
+        return {'error': f"{quant_on_label}: {momentum_on.get('error')}"}
+
     s2 = run_strategy_backtest(
         quant_s2_key, top_n, rebalance, period, transaction_cost_bps, slippage_bps
     )
     if s2.get('error'):
         return {'error': f"{quant_s2_label}: {s2.get('error')}"}
 
+    s2_on = run_strategy_backtest(
+        quant_s2_on_key, top_n, rebalance, period, transaction_cost_bps, slippage_bps
+    )
+    if s2_on.get('error'):
+        return {'error': f"{quant_s2_on_label}: {s2_on.get('error')}"}
+
     if _kq_build_quant_comparison_response is not None:
-        return _kq_build_quant_comparison_response(momentum, s2)
+        return _kq_build_quant_comparison_response(momentum, momentum_on, s2, s2_on)
 
     payload = dict(momentum)
     payload['strategy'] = 'quant_compare'
     payload['comparison_runs'] = [
-        {'label': '퀀트(모멘텀)', 'color': '#388bfd', 'data': momentum},
-        {'label': '퀀트(S2모멘텀)', 'color': '#3fb950', 'data': s2},
+        {'label': '퀀트(모멘텀) OFF', 'color': '#388bfd', 'data': momentum},
+        {'label': '퀀트(모멘텀) ON', 'color': '#79c0ff', 'data': momentum_on},
+        {'label': '퀀트(S2모멘텀) OFF', 'color': '#3fb950', 'data': s2},
+        {'label': '퀀트(S2모멘텀) ON', 'color': '#56d364', 'data': s2_on},
     ]
     payload['comparison_benchmark'] = {
         'label': 'KOSPI',
@@ -1979,20 +1999,7 @@ def _run_strategy_backtest(strategy, top_n, rebalance, period, transaction_cost_
             px = {}
 
     if not px:
-        # data_loader의 종가 그룹 직접 사용 (legacy fallback)
-        _dl_mod._load_price_parquet('price_종가.parquet')
-        close_groups_path = os.path.join(_dl_mod.CACHE_DIR, 'price_종가.parquet')
-        close_groups = _dl_mod._PRICE_GROUPS.get(close_groups_path, {})
-        if not close_groups:
-            return {'error': '종가 데이터 로드 실패'}
-        for t in top_tickers:
-            code = _ticker_to_code(t)
-            s = close_groups.get(code)
-            if s is not None and len(s) >= 20:
-                px[t] = s
-
-    if not px:
-        return {'error': 'UNIVERSE와 데이터 매칭 실패'}
+        return {'error': '수정주가 패널(data/prices/close.csv)에서 백테스트 가격을 로드하지 못했습니다'}
 
     # KOSPI 벤치마크 (yfinance, 1회만)
     kospi = None
@@ -2663,6 +2670,43 @@ def recommend_portfolio():
     return _cached('recommend_portfolio', 300, _build_recommend_portfolio)
 
 
+def _portfolio_order_price_lookup(ticker):
+    """Return latest adjusted close and date from the app data gateway."""
+    try:
+        from kq_tool.data.app_data import get_price_series
+        series = get_price_series(ticker, 'max')
+        if series is None:
+            return None, None
+        series = series.dropna()
+        if series.empty:
+            return None, None
+        return float(series.iloc[-1]), series.index[-1].strftime('%Y-%m-%d')
+    except Exception:
+        return None, None
+
+
+def portfolio_orders(amount=10000000, transaction_cost_bps=10, slippage_bps=5, holdings_text=''):
+    """Build an integer-quantity order plan for the current recommendation."""
+    from kq_tool.portfolio.order_ticket import build_order_ticket, parse_holdings_text
+    return build_order_ticket(
+        recommend_portfolio(),
+        amount=amount,
+        price_lookup=_portfolio_order_price_lookup,
+        transaction_cost_bps=transaction_cost_bps,
+        slippage_bps=slippage_bps,
+        current_holdings=parse_holdings_text(holdings_text),
+    )
+
+
+def return_heatmap(limit_months=36):
+    """Return monthly strategy/asset return heatmap payloads."""
+    from kq_tool.portfolio.return_heatmap import build_return_heatmap
+    limit = int(limit_months or 36)
+    if limit <= 0:
+        limit = None
+    return build_return_heatmap(limit_months=limit)
+
+
 def _load_recommendation_regime_alpha_summary():
     if not (_KQ_PORTFOLIO_HELPERS_READY and _kq_load_regime_alpha_summary is not None):
         return []
@@ -2989,6 +3033,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             regime_ai=build_regime_ai_response,
             recommend_portfolio=recommend_portfolio,
             market_report=build_market_report_response,
+            portfolio_orders=portfolio_orders,
+            return_heatmap=return_heatmap,
         )
 
     def _read_json_body(self, max_bytes=2000000):
@@ -3033,6 +3079,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 regime_ai=self._regime_ai,
                 recommend_portfolio=self._recommend_portfolio,
                 health=build_health_response,
+                portfolio_orders=portfolio_orders,
+                return_heatmap=return_heatmap,
             )
             return
 
@@ -3163,6 +3211,9 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
 
 
 

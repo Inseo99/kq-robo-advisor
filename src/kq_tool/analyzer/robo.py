@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from kq_tool.analyzer.alpha_decay import half_life_to_confidence
+from kq_tool.analyzer.alpha_decay import classify_decay_quality, half_life_to_confidence
 from kq_tool.config import (
     ROBO_BUY_THRESHOLD,
     ROBO_SELL_THRESHOLD,
@@ -87,38 +87,40 @@ def confidence_weighted_robo(
                     "half_life": None,
                     "weight": 0.0,
                     "signal_name": None,
+                    "decay_state": "neutral",
+                    "decay_basis": "neutral",
+                    "decay_reason_code": "neutral_indicator_signal",
+                    "decay_reason_data": {},
                 }
             )
             continue
 
         if matches:
             signal_name, alpha_detail = matches[0]
-            confidence = half_life_to_confidence(
-                alpha_detail.get("half_life"), alpha_detail.get("count", 0)
-            )
-            half_life = alpha_detail.get("half_life")
-            decay_basis = "half_life" if half_life else None
-            if half_life:
+            decay_quality = classify_decay_quality(signal_name, alpha_detail)
+            confidence = float(decay_quality["decay_confidence"])
+            half_life = decay_quality["effective_half_life"]
+            decay_basis = decay_quality["decay_basis"]
+            if half_life and decay_quality["decay_state"] != "neutral":
                 decay_days.append(half_life)
-                decay_weights.append(confidence)
-            else:
-                horizon_returns = alpha_detail.get("horizon_rets", {})
-                valid_returns = [
-                    (int(horizon), float(ret))
-                    for horizon, ret in horizon_returns.items()
-                    if ret is not None and ret > 0
-                ]
-                if valid_returns:
-                    peak_day, _ = max(valid_returns, key=lambda item: item[1])
-                    decay_days.append(float(peak_day))
-                    decay_weights.append(confidence * 0.7)
-                    half_life = peak_day
-                    decay_basis = "peak"
+                decay_weight = confidence if decay_quality["decay_state"] == "measured" else confidence * 0.75
+                decay_weights.append(decay_weight)
         else:
+            decay_quality = {
+                "decay_state": "neutral",
+                "decay_basis": "neutral",
+                "decay_reason_code": "no_active_alpha_signal",
+                "decay_reason_data": {},
+                "decay_family": None,
+                "effective_half_life": None,
+                "raw_half_life": None,
+                "decay_confidence": 5.0,
+                "min_decay_events": None,
+            }
             confidence = 5.0
             signal_name = None
             half_life = None
-            decay_basis = None
+            decay_basis = "neutral"
 
         effective_weight = base_weight * (confidence / 10.0)
         weighted_sum += direction * effective_weight
@@ -133,6 +135,12 @@ def confidence_weighted_robo(
                 "weight": round(effective_weight, 2),
                 "signal_name": signal_name,
                 "decay_basis": decay_basis,
+                "decay_state": decay_quality["decay_state"],
+                "decay_reason_code": decay_quality["decay_reason_code"],
+                "decay_reason_data": decay_quality.get("decay_reason_data", {}),
+                "decay_family": decay_quality.get("decay_family"),
+                "raw_half_life": decay_quality.get("raw_half_life"),
+                "min_decay_events": decay_quality.get("min_decay_events"),
             }
         )
 
@@ -151,6 +159,18 @@ def confidence_weighted_robo(
         else None
     )
 
+    active_decay_states = [
+        row.get("decay_state")
+        for row in detail_rows
+        if row["direction"] != 0 and row.get("decay_state") is not None
+    ]
+    if "measured" in active_decay_states:
+        overall_decay_state = "measured"
+    elif "imputed" in active_decay_states:
+        overall_decay_state = "imputed"
+    else:
+        overall_decay_state = "neutral"
+
     exit_days = (
         round(float(np.average(decay_days, weights=decay_weights)), 1)
         if decay_days and sum(decay_weights) > 0
@@ -159,7 +179,13 @@ def confidence_weighted_robo(
     if exit_days is not None:
         valid_days = exit_days
         validity_basis = "alpha_decay"
-        validity_text = f"활성 신호의 Alpha Decay 기반 유효기간 (반감기/peak 종합, {exit_days:.0f}일)"
+        states = {row.get("decay_state") for row in detail_rows if row["direction"] != 0}
+        if states == {"imputed"}:
+            validity_text = f"계열 prior 기반 보수적 유효기간 ({exit_days:.0f}일)"
+        elif "imputed" in states:
+            validity_text = f"측정 반감기 + 계열 prior 종합 유효기간 ({exit_days:.0f}일)"
+        else:
+            validity_text = f"활성 신호의 Alpha Decay 기반 유효기간 (반감기 종합, {exit_days:.0f}일)"
     else:
         valid_days = 5 if signal in ("매수", "매도") else 10
         validity_basis = "review_interval"
@@ -170,6 +196,7 @@ def confidence_weighted_robo(
         "signal": signal,
         "confidence": overall_confidence,
         "exit_days": exit_days,
+        "decay_state": overall_decay_state,
         "valid_days": valid_days,
         "validity_basis": validity_basis,
         "validity_text": validity_text,

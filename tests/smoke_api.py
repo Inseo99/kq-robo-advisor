@@ -47,7 +47,8 @@ def quant_compare_check(payload: dict) -> tuple[str, bool, dict]:
     ok = (
         "error" not in payload
         and payload.get("strategy") == "quant_compare"
-        and len(runs) == 2
+        and len(runs) >= 4
+        and bool(payload.get("overlay_report", {}).get("reports"))
         and bool(benchmark.get("equity"))
     )
     return (
@@ -55,6 +56,7 @@ def quant_compare_check(payload: dict) -> tuple[str, bool, dict]:
         ok,
         {
             "runs": [run.get("label") for run in runs],
+            "overlay_report": bool(payload.get("overlay_report", {}).get("reports")),
             "benchmark": bool(benchmark.get("equity")),
         },
     )

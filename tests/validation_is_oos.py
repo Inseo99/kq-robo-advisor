@@ -24,10 +24,13 @@ except Exception:
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
+sys.path.insert(0, os.path.join(ROOT_DIR, 'src'))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from validation_core import prepare_bt_data, run_bt_core
+from kq_tool.data.gateway import stamp_results
 
 
 def run_is_oos_split(strategy='quant', top_n=5,
@@ -183,6 +186,8 @@ if __name__ == '__main__':
         save_data[f'{s}_is_sharpe'] = r['is_result'].get('sharpe', 0)
         save_data[f'{s}_oos_sharpe'] = r['oos_result'].get('sharpe', 0)
         save_data[f'{s}_cagr_gap'] = r['cagr_gap']
-    np.savez(save_path, **save_data)
+    np.savez(save_path, **stamp_results(save_data))
     print(f"\n💾 결과 저장: {save_path}")
+
+
 

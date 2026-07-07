@@ -31,6 +31,13 @@ def _services():
         "regime_ai": lambda: {"regime": True},
         "recommend_portfolio": lambda: {"recommend": True},
         "market_report": lambda: {"market_report": True},
+        "portfolio_orders": lambda amount, tc, slip, holdings="": {
+            "amount": amount,
+            "tc": tc,
+            "slip": slip,
+            "holdings": holdings,
+        },
+        "return_heatmap": lambda limit: {"limit": limit},
     }
 
 
@@ -84,6 +91,27 @@ def test_build_get_response_routes_core_zero_arg_services() -> None:
     assert build_get_response("/api/recommend_portfolio", services, make_response=_make_response)["payload"] == {
         "recommend": True
     }
+
+
+def test_build_get_response_routes_portfolio_orders() -> None:
+    response = build_get_response(
+        "/api/portfolio_orders?amount=1234567&tc=10&slip=5&holdings=069500.KS%3D10",
+        _services(),
+        make_response=_make_response,
+    )
+
+    assert response["payload"] == {
+        "amount": 1234567.0,
+        "tc": 10.0,
+        "slip": 5.0,
+        "holdings": "069500.KS=10",
+    }
+
+
+def test_build_get_response_routes_return_heatmap() -> None:
+    response = build_get_response("/api/return_heatmap?limit=60", _services(), make_response=_make_response)
+
+    assert response["payload"] == {"limit": 60}
 
 
 def test_build_get_response_unknown_route_returns_404() -> None:
