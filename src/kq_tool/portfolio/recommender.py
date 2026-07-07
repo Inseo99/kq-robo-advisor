@@ -320,6 +320,8 @@ def signal_weight_multiplier(signal: Mapping[str, object], *, signal_tilt_scale:
     """Convert robo/Alpha-Decay signal into a small portfolio weight multiplier."""
 
     action = signal.get("cw_signal") or signal.get("signal") or "관망"
+    if signal.get("decay_state") == "neutral":
+        return 1.0
     try:
         confidence = float(signal.get("confidence") or 0.0)
     except Exception:
@@ -388,6 +390,7 @@ def default_asset_signal(error: str | None = None) -> dict:
         "cw_score": None,
         "confidence": None,
         "exit_days": None,
+        "decay_state": "neutral",
         "cur": None,
         "chg": None,
         "cur_date": None,
@@ -410,6 +413,7 @@ def stock_analysis_to_asset_signal(analysis: Mapping[str, object]) -> dict:
             "cw_score": robo.get("cw_score"),
             "confidence": robo.get("confidence"),
             "exit_days": robo.get("exit_days"),
+            "decay_state": robo.get("decay_state") or "neutral",
             "cur": analysis.get("cur"),
             "chg": analysis.get("chg"),
             "cur_date": analysis.get("cur_date"),

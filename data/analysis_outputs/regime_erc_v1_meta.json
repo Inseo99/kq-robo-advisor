@@ -1,0 +1,8 @@
+{
+  "method": "kappa-shrinkage bounded ERC",
+  "data_source": "real ETF monthly returns + real PiT regime labels",
+  "returns_file": "data/assets/monthly_returns.csv",
+  "labels_file": "data/regime/labels.csv",
+  "n0": 36.0,
+  "note": "v1 uses real ETF sample only; no pre-listing index proxies."
+}

@@ -43,8 +43,28 @@ from .regime_model_v2 import (
     walk_forward_predict,
 )
 from .response import build_regime_ai_payload
+from .transition_pit import (
+    TransitionPitConfig,
+    expanding_transition_matrices,
+    full_sample_transition_matrix,
+    load_regime_history,
+    lookahead_distance_summary,
+    posterior_transition_matrix,
+    sticky_prior_matrix,
+    transition_audit_payload,
+    transition_counts,
+)
 
 __all__ = [
+    "TransitionPitConfig",
+    "transition_audit_payload",
+    "lookahead_distance_summary",
+    "load_regime_history",
+    "full_sample_transition_matrix",
+    "expanding_transition_matrices",
+    "posterior_transition_matrix",
+    "sticky_prior_matrix",
+    "transition_counts",
     "walk_forward_predict",
     "p3_forecast_baseline",
     "naive_nowcast_baseline",

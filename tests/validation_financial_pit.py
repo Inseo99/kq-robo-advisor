@@ -103,6 +103,17 @@ def main() -> int:
         latest_early.get(MCAP_KEY) == 100.0 and latest_late.get(MCAP_KEY) == 150.0,
         f"early={latest_early.get(MCAP_KEY)}, late={latest_late.get(MCAP_KEY)}",
     )
+    check(
+        "F3b: 화면용 재무 메타데이터는 최신 관측 스냅샷과 TTM을 함께 제공",
+        latest_late.get("__latest_period_date") == "2024-06-30"
+        and latest_late.get("__latest_observable_date") == "2024-08-14"
+        and latest_late.get("__net_income_ttm") == 30.0
+        and latest_late.get("__market_cap_latest") == 200.0,
+        str({k: latest_late.get(k) for k in [
+            "__latest_period_date", "__latest_observable_date",
+            "__net_income_ttm", "__market_cap_latest",
+        ]}),
+    )
 
     hist = build_mcap_history_pit(
         {"005930.KS": ("삼성전자", "IT"), "000660.KS": ("SK하이닉스", "IT")},
@@ -149,4 +160,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

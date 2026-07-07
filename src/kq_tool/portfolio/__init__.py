@@ -41,6 +41,14 @@ from .recommender import (
     signal_weight_multiplier,
     stock_analysis_to_asset_signal,
 )
+from .regime_erc import (
+    DEFAULT_ASSET_BOUNDS,
+    DEFAULT_REGIME_ASSET_BOUNDS,
+    RegimeERCConfig,
+    bounded_erc_weights,
+    build_regime_erc_allocations,
+    shrink_covariance,
+)
 from .weights import combine_weight_sets, meta_base_weights, normalize_weights
 from .shadow_ledger import (
     build_ledger,
@@ -66,12 +74,17 @@ from .validity import portfolio_validity
 __all__ = [
     "BanditConfig",
     "BanditResult",
+    "DEFAULT_ASSET_BOUNDS",
+    "DEFAULT_REGIME_ASSET_BOUNDS",
+    "RegimeERCConfig",
     "TEAConfig",
     "TEAResult",
     "RESIDUAL_MOMENTUM_FACTOR_COLS",
     "ResMomBacktestResult",
     "ResMomConfig",
     "compute_transition_expected_allocation",
+    "build_regime_erc_allocations",
+    "bounded_erc_weights",
     "compute_plain_momentum_signal",
     "compute_residual_momentum_signal",
     "context_free_cum",
@@ -111,6 +124,7 @@ __all__ = [
     "risk_contributions",
     "risk_based_strategy_weights",
     "signal_weight_multiplier",
+    "shrink_covariance",
     "stock_analysis_to_asset_signal",
 ]
 

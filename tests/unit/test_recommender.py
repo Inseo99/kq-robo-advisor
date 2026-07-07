@@ -101,6 +101,14 @@ def test_signal_weight_multiplier_accepts_robo_confidence_scale() -> None:
     assert mid_confidence < point_scale
 
 
+def test_signal_weight_multiplier_neutral_decay_is_no_adjustment() -> None:
+    multiplier = signal_weight_multiplier(
+        {"cw_signal": "매수", "confidence": 9.0, "exit_days": None, "decay_state": "neutral"}
+    )
+
+    assert multiplier == 1.0
+
+
 def test_default_asset_signal_is_neutral() -> None:
     signal = default_asset_signal(error="boom")
 
@@ -134,6 +142,7 @@ def test_stock_analysis_to_asset_signal_extracts_recommendation_fields() -> None
         "cw_score": 68,
         "confidence": 0.8,
         "exit_days": 12,
+        "decay_state": "neutral",
         "cur": 70000,
         "chg": 1.2,
         "cur_date": "2026-06-29",

@@ -132,14 +132,16 @@ def latest_financials_asof(
     *,
     items: Sequence[str] = DEFAULT_FINANCIAL_ITEMS,
     lookback_quarters: int = 4,
-) -> dict[str, float]:
-    """Return trailing financial values using only rows observable by ``asof``."""
+) -> dict[str, object]:
+    """Return trailing financial values and latest-period metadata observable by ``asof``."""
 
     rows = available_financial_rows(fin_df, ticker=ticker, asof=asof)
     if rows.empty:
         return {}
 
-    out: dict[str, float] = {}
+    out: dict[str, object] = {}
+    latest_periods: list[pd.Timestamp] = []
+    latest_observable_dates: list[pd.Timestamp] = []
     for item in items:
         sub = rows[rows["item"] == item].sort_values(["observable_date", "period_date"])
         if sub.empty:
@@ -147,6 +149,41 @@ def latest_financials_asof(
         vals = pd.to_numeric(sub["value"], errors="coerce").dropna().tail(lookback_quarters)
         if not vals.empty:
             out[item] = float(vals.mean())
+            latest_periods.append(pd.Timestamp(sub.iloc[-1]["period_date"]))
+            latest_observable_dates.append(pd.Timestamp(sub.iloc[-1]["observable_date"]))
+
+    def _latest_value(item: str) -> float | None:
+        sub = rows[rows["item"] == item].sort_values(["observable_date", "period_date"])
+        vals = pd.to_numeric(sub["value"], errors="coerce").dropna()
+        if vals.empty:
+            return None
+        return float(vals.iloc[-1])
+
+    def _trailing_sum(item: str) -> float | None:
+        sub = rows[rows["item"] == item].sort_values(["observable_date", "period_date"])
+        vals = pd.to_numeric(sub["value"], errors="coerce").dropna().tail(lookback_quarters)
+        if vals.empty:
+            return None
+        return float(vals.sum())
+
+    net_income_ttm = _trailing_sum("당기순이익(천원)")
+    equity_latest = _latest_value("자본총계(천원)")
+    if latest_periods:
+        out["__latest_period_date"] = max(latest_periods).strftime("%Y-%m-%d")
+    if latest_observable_dates:
+        out["__latest_observable_date"] = max(latest_observable_dates).strftime("%Y-%m-%d")
+    meta_values = {
+        "__net_income_ttm": net_income_ttm,
+        "__equity_latest": equity_latest,
+        "__shares_latest": _latest_value("기말발행주식수(보통주)(주)"),
+        "__market_cap_latest": _latest_value(MCAP_KEY),
+        "__roe_latest": _latest_value("ROE(%)"),
+    }
+    if net_income_ttm is not None and equity_latest and equity_latest > 0:
+        meta_values["__roe_ttm_calc"] = net_income_ttm / equity_latest * 100
+    for key, value in meta_values.items():
+        if value is not None:
+            out[key] = float(value)
     return out
 
 
