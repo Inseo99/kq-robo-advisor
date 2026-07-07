@@ -50,6 +50,8 @@ def build_get_response(
                 params.slippage_bps,
             ),
         )
+    if path == "/api/market_report":
+        return make_response("json", services["market_report"]())
     if path == "/api/regime_ai":
         return make_response("json", services["regime_ai"]())
     if path == "/api/recommend_portfolio":

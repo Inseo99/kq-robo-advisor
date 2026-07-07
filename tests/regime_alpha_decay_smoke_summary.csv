@@ -1,0 +1,5 @@
+﻿regime,events,edge_pct,random_pct,excess_pct,percentile,p_value,universe_source,signal_side,ticker_segment,mode,min_quality,cost_bps,slippage_bps,trade_sides,cost_rate_pct
+골디락스,148,2.560931208200979,-0.21469901793156387,2.775630226132543,100.0,0.0,equity,buy,all,quality,0.6,0.0,0.0,2,0.0
+리플레이션,128,1.4545753597060098,0.7698018616667379,0.6847734980392718,100.0,0.0,equity,buy,all,quality,0.6,0.0,0.0,2,0.0
+스태그플레이션,108,3.5605938717080696,1.3652521253067809,2.1953417464012888,100.0,0.0,equity,buy,all,quality,0.6,0.0,0.0,2,0.0
+디플레이션,127,0.8485665930189867,1.1808432195454859,-0.3322766265264992,20.0,0.8,equity,buy,all,quality,0.6,0.0,0.0,2,0.0

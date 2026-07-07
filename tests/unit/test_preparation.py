@@ -1,9 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
 from kq_tool.backtest.preparation import (
+    evaluation_start_for_period,
     filter_strategy_benchmark_period,
     prepare_strategy_price_frame,
     use_fixed_start_for_period,
@@ -45,6 +46,27 @@ def test_prepare_strategy_price_frame_filters_valid_columns_and_preserves_rows()
     assert prepared["B"].notna().sum() == 70
 
 
+
+def test_prepare_strategy_price_frame_can_keep_warmup_before_report_window() -> None:
+    frame = _prices(700)
+    start = evaluation_start_for_period(
+        frame,
+        "1y",
+        period_days_fn=lambda _period, _default: 365,
+    )
+    prepared, error = prepare_strategy_price_frame(
+        frame,
+        "1y",
+        period_days_fn=lambda _period, _default: 365,
+        min_observations=60,
+        warmup_days=365,
+    )
+
+    assert error is None
+    assert prepared is not None
+    assert prepared.index[0] < start
+    assert prepared.loc[:start].shape[0] >= 252
+
 def test_prepare_strategy_price_frame_returns_error_when_no_valid_columns() -> None:
     frame = pd.DataFrame({"A": [np.nan, np.nan]}, index=pd.date_range("2024-01-01", periods=2))
 
@@ -70,3 +92,5 @@ def test_server_reuses_backtest_preparation_helpers() -> None:
     from kq_tool.backtest.preparation import prepare_strategy_price_frame as helper
 
     assert server._kq_prepare_strategy_price_frame is helper
+
+

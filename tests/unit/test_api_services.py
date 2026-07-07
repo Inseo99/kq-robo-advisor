@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
@@ -50,6 +50,7 @@ def test_build_server_api_services_wraps_macro_payload_and_keeps_order() -> None
         stratbt=lambda *args: {"args": args},
         regime_ai=_callable,
         recommend_portfolio=_callable,
+        market_report=_callable,
     )
 
     assert tuple(services) == REQUIRED_SERVICE_KEYS

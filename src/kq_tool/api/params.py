@@ -1,4 +1,4 @@
-"""API query parameter parsing helpers."""
+﻿"""API query parameter parsing helpers."""
 
 from __future__ import annotations
 
@@ -51,6 +51,7 @@ def parse_strategy_backtest_params(query: QueryParams) -> StrategyBacktestParams
         top_n=int(first_query_value(query, "n", "5")),
         rebalance=first_query_value(query, "r", "M"),
         period=first_query_value(query, "p", "3y"),
-        transaction_cost_bps=float(first_query_value(query, "tc", "0")),
-        slippage_bps=float(first_query_value(query, "slip", "0")),
+        transaction_cost_bps=float(first_query_value(query, "tc", "10")),
+        slippage_bps=float(first_query_value(query, "slip", "5")),
     )
+

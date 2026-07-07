@@ -1,10 +1,17 @@
-"""Portfolio allocation helpers."""
+﻿"""Portfolio allocation helpers."""
 
 from .allocation import (
     evaluate_asset_allocation_strategies,
     gtaa_weights,
     inverse_volatility_weights,
     risk_based_strategy_weights,
+)
+from .rebalancing import (
+    RebalanceDecision,
+    RebalancePolicy,
+    band_status,
+    decide,
+    turnover,
 )
 from .risk_based import (
     diversification_ratio,
@@ -18,18 +25,39 @@ from .recommender import (
     apply_signal_tilt,
     auto_regime_tilt,
     build_recommendation_report,
+    load_regime_alpha_summary,
+    probability_weighted_regime_target,
+    regime_probability_blend,
+    regime_alpha_signal_adjustment,
     default_asset_signal,
     signal_weight_multiplier,
     stock_analysis_to_asset_signal,
 )
 from .weights import combine_weight_sets, meta_base_weights, normalize_weights
+from .shadow_ledger import (
+    build_ledger,
+    ledger_summary,
+    run_and_save as run_shadow_ledger_and_save,
+)
 from .validity import portfolio_validity
 
 __all__ = [
+    "run_shadow_ledger_and_save",
+    "ledger_summary",
+    "build_ledger",
+    "turnover",
+    "decide",
+    "band_status",
+    "RebalancePolicy",
+    "RebalanceDecision",
     "REGIME_TARGETS",
     "apply_signal_tilt",
     "auto_regime_tilt",
     "build_recommendation_report",
+    "load_regime_alpha_summary",
+    "probability_weighted_regime_target",
+    "regime_probability_blend",
+    "regime_alpha_signal_adjustment",
     "combine_weight_sets",
     "default_asset_signal",
     "diversification_ratio",
@@ -47,3 +75,8 @@ __all__ = [
     "signal_weight_multiplier",
     "stock_analysis_to_asset_signal",
 ]
+
+
+
+
+
