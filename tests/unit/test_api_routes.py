@@ -29,7 +29,7 @@ def _services():
             "slippage_bps": slippage_bps,
         },
         "regime_ai": lambda: {"regime": True},
-        "recommend_portfolio": lambda: {"recommend": True},
+        "recommend_portfolio": lambda *a: {"recommend": True},
         "market_report": lambda: {"market_report": True},
         "portfolio_orders": lambda amount, tc, slip, holdings="": {
             "amount": amount,
