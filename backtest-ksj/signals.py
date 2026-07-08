@@ -71,18 +71,23 @@ def _resample(series: pd.Series, cadence: str) -> pd.Series:
 def build_gate(cadence: str, variant: str, eval_dates: list,
                kodex_daily: pd.Series, vix: pd.Series | None,
                credit: pd.Series | None,
-               sp500: pd.Series | None = None) -> tuple[dict, dict]:
+               sp500: pd.Series | None = None,
+               t2_index: pd.Series | None = None) -> tuple[dict, dict]:
     """eval_date -> 투자비중(1.0/0.0) 딕셔너리와 신호상세 딕셔너리 반환.
 
     variant: s1(항상 1.0) / s2(t1: 2개↑ 위험 -> 0.0) / s3(t2: MA 위 -> 1.0)
 
     t1 신호(s2): ① S&P500 < 9M MA  ② VIX > 18.6  ③ 미국 신용스프레드 z(5M) > 1.78
     → 3개 중 2개 이상 켜짐 → 주식비중 0%. (①은 S&P500, 없으면 KODEX200로 대체)
+
+    t2_index: t2(s3) 추세추종 기준 지수. 기본 KODEX200(kodex_daily).
+              미국 종목선정(us_sec/sp500)은 S&P500을 전달(2026-07-08 사용자 확정).
     """
     if variant == "s1":
         return {d: 1.0 for d in eval_dates}, {d: {} for d in eval_dates}
 
-    k = _resample(kodex_daily, cadence)
+    t2_src = t2_index if t2_index is not None else kodex_daily
+    k = _resample(t2_src, cadence)
     if cadence == "M":
         ma_t2 = k.rolling(C.T2_MA_M).mean()            # t2 10M (s3)
         trend_ma_win = C.T1_TREND_MA_M                 # t1① 9M
