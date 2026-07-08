@@ -10,6 +10,27 @@ from ..params import parse_stock_params, parse_strategy_backtest_params
 ResponseFactory = Callable[..., object]
 
 
+def _query_float(query: Mapping[str, list[str]], key: str, default: float) -> float:
+    try:
+        return float(query.get(key, [default])[0])
+    except (TypeError, ValueError):
+        return default
+
+
+def _query_int(query: Mapping[str, list[str]], key: str, default: int) -> int:
+    try:
+        return int(float(query.get(key, [default])[0]))
+    except (TypeError, ValueError):
+        return default
+
+
+def _query_text(query: Mapping[str, list[str]], key: str, default: str = "") -> str:
+    try:
+        return str(query.get(key, [default])[0])
+    except (TypeError, ValueError):
+        return default
+
+
 def build_get_response(
     path_with_query: str,
     services: Mapping[str, Callable[..., object]],
@@ -55,5 +76,20 @@ def build_get_response(
     if path == "/api/regime_ai":
         return make_response("json", services["regime_ai"]())
     if path == "/api/recommend_portfolio":
-        return make_response("json", services["recommend_portfolio"]())
+        return make_response("json", services["recommend_portfolio"](_query_text(query, "profile", "neutral")))
+    if path == "/api/portfolio_orders" and "portfolio_orders" in services:
+        return make_response(
+            "json",
+            services["portfolio_orders"](
+                _query_float(query, "amount", 10000000.0),
+                _query_float(query, "tc", 10.0),
+                _query_float(query, "slip", 5.0),
+                _query_text(query, "holdings", ""),
+            ),
+        )
+    if path == "/api/return_heatmap" and "return_heatmap" in services:
+        return make_response(
+            "json",
+            services["return_heatmap"](_query_int(query, "limit", 36)),
+        )
     return make_response("not_found", {"error": "not found"}, code=404)

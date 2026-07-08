@@ -59,7 +59,13 @@ def test_quant_compare_check_requires_two_runs_and_benchmark() -> None:
     name, ok, payload = smoke.quant_compare_check(
         {
             "strategy": "quant_compare",
-            "comparison_runs": [{"label": "퀀트(모멘텀)"}, {"label": "퀀트(S2모멘텀)"}],
+            "comparison_runs": [
+                {"label": "퀀트(모멘텀) OFF"},
+                {"label": "퀀트(모멘텀) ON"},
+                {"label": "퀀트(S2모멘텀) OFF"},
+                {"label": "퀀트(S2모멘텀) ON"},
+            ],
+            "overlay_report": {"reports": [{"label": "퀀트(모멘텀)"}]},
             "comparison_benchmark": {"equity": [100, 101]},
         }
     )
@@ -67,7 +73,13 @@ def test_quant_compare_check_requires_two_runs_and_benchmark() -> None:
     assert name == "stratbt_compare"
     assert ok is True
     assert payload == {
-        "runs": ["퀀트(모멘텀)", "퀀트(S2모멘텀)"],
+        "runs": [
+            "퀀트(모멘텀) OFF",
+            "퀀트(모멘텀) ON",
+            "퀀트(S2모멘텀) OFF",
+            "퀀트(S2모멘텀) ON",
+        ],
+        "overlay_report": True,
         "benchmark": True,
     }
 

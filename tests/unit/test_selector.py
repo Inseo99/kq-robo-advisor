@@ -7,6 +7,8 @@ from kq_tool.backtest.selector import (
     build_robo_precomputed_indicators,
     latest_at_or_before,
     robo_scores_from_indicators,
+    robo_filter_decision,
+    select_robo_filtered_momentum,
     select_for_backtest,
     select_momentum,
     select_robo,
@@ -93,6 +95,74 @@ def test_select_robo_returns_top_positive_scores() -> None:
     selected = select_robo(hist, top_n=2)
 
     assert len(selected) == 2
+
+
+def test_select_robo_filtered_momentum_replaces_bearish_top_candidate() -> None:
+    rows = 80
+    index = pd.date_range("2024-01-01", periods=rows, freq="B")
+    x = np.arange(rows)
+    hist = pd.DataFrame(
+        {
+            "A": 100 + x * 1.00,
+            "B": 100 + x * 0.70,
+            "C": 100 + x * 0.50,
+            "D": 100 + x * 0.20,
+        },
+        index=index,
+    )
+    cur_date = hist.index[-1]
+    precomputed = {
+        "rsi": pd.DataFrame([{"A": 80, "B": 20, "C": 20, "D": 50}], index=[cur_date]),
+        "macd_bull": pd.DataFrame([{"A": 0, "B": 1, "C": 1, "D": 1}], index=[cur_date]),
+        "ma20": pd.DataFrame([{"A": hist["A"].iloc[-1] + 1, "B": 100, "C": 100, "D": 100}], index=[cur_date]),
+        "ma60": pd.DataFrame([{"A": hist["A"].iloc[-1] + 1, "B": 100, "C": 100, "D": 100}], index=[cur_date]),
+    }
+
+    selected = select_robo_filtered_momentum(
+        hist,
+        base_strategy="quant",
+        top_n=2,
+        precomputed=precomputed,
+        cur_date=cur_date,
+    )
+
+    assert selected == ["B", "C"]
+
+
+def test_robo_filter_decision_reports_excluded_and_replacements() -> None:
+    rows = 80
+    index = pd.date_range("2024-01-01", periods=rows, freq="B")
+    x = np.arange(rows)
+    hist = pd.DataFrame(
+        {
+            "A": 100 + x * 1.00,
+            "B": 100 + x * 0.70,
+            "C": 100 + x * 0.50,
+            "D": 100 + x * 0.20,
+        },
+        index=index,
+    )
+    cur_date = hist.index[-1]
+    precomputed = {
+        "rsi": pd.DataFrame([{"A": 80, "B": 20, "C": 20, "D": 50}], index=[cur_date]),
+        "macd_bull": pd.DataFrame([{"A": 0, "B": 1, "C": 1, "D": 1}], index=[cur_date]),
+        "ma20": pd.DataFrame([{"A": hist["A"].iloc[-1] + 1, "B": 100, "C": 100, "D": 100}], index=[cur_date]),
+        "ma60": pd.DataFrame([{"A": hist["A"].iloc[-1] + 1, "B": 100, "C": 100, "D": 100}], index=[cur_date]),
+    }
+
+    decision = robo_filter_decision(
+        hist,
+        base_strategy="quant",
+        top_n=2,
+        precomputed=precomputed,
+        cur_date=cur_date,
+    )
+
+    assert decision["raw_selected"] == ["A", "B"]
+    assert decision["selected"] == ["B", "C"]
+    assert decision["excluded"] == ["A"]
+    assert decision["replacements"] == ["C"]
+    assert decision["scores"]["A"] < 0
 
 
 def test_select_for_backtest_dispatches_unknown_to_first_columns() -> None:

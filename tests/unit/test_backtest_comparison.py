@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from kq_tool.backtest.comparison import build_quant_comparison_response
-from kq_tool.backtest.strategy_meta import KOSPI_BENCHMARK, QUANT, QUANT_COMPARE, QUANT_S2
+from kq_tool.backtest.strategy_meta import (
+    KOSPI_BENCHMARK,
+    QUANT,
+    QUANT_COMPARE,
+    QUANT_ROBO_FILTER,
+    QUANT_S2,
+    QUANT_S2_ROBO_FILTER,
+)
 
 
 def test_build_quant_comparison_response_preserves_legacy_base_shape() -> None:
@@ -20,17 +27,34 @@ def test_build_quant_comparison_response_preserves_legacy_base_shape() -> None:
         "dates": ["2025-01-31", "2025-02-28"],
         "metrics": {"cagr": 20.0},
     }
+    quant_on = {
+        "strategy": QUANT_ROBO_FILTER.key,
+        "equity": [100, 115],
+        "dates": ["2025-01-31", "2025-02-28"],
+        "metrics": {"cagr": 15.0},
+    }
+    s2_on = {
+        "strategy": QUANT_S2_ROBO_FILTER.key,
+        "equity": [100, 125],
+        "dates": ["2025-01-31", "2025-02-28"],
+        "metrics": {"cagr": 25.0},
+    }
 
-    result = build_quant_comparison_response(quant, s2)
+    result = build_quant_comparison_response(quant, quant_on, s2, s2_on)
 
     assert result["strategy"] == QUANT_COMPARE.key
     assert result["metrics"] == {"cagr": 10.0}
     assert [run["label"] for run in result["comparison_runs"]] == [
-        QUANT.label,
-        QUANT_S2.label,
+        f"{QUANT.label} OFF",
+        f"{QUANT.label} ON",
+        f"{QUANT_S2.label} OFF",
+        f"{QUANT_S2.label} ON",
     ]
     assert result["comparison_runs"][0]["data"]["strategy"] == QUANT.key
-    assert result["comparison_runs"][1]["data"]["strategy"] == QUANT_S2.key
+    assert result["comparison_runs"][1]["data"]["strategy"] == QUANT_ROBO_FILTER.key
+    assert result["comparison_runs"][2]["data"]["strategy"] == QUANT_S2.key
+    assert result["comparison_runs"][3]["data"]["strategy"] == QUANT_S2_ROBO_FILTER.key
+    assert result["overlay_report"]["reports"][0]["rows"][1]["metric"] == "CAGR"
     assert result["comparison_benchmark"] == {
         "label": KOSPI_BENCHMARK.label,
         "color": KOSPI_BENCHMARK.color,
@@ -42,9 +66,11 @@ def test_build_quant_comparison_response_preserves_legacy_base_shape() -> None:
 
 def test_build_quant_comparison_response_does_not_mutate_inputs() -> None:
     quant = {"strategy": QUANT.key, "benchmark": [100], "benchmark_dates": ["2025-01-31"]}
+    quant_on = {"strategy": QUANT_ROBO_FILTER.key, "equity": [100]}
     s2 = {"strategy": QUANT_S2.key, "equity": [100]}
+    s2_on = {"strategy": QUANT_S2_ROBO_FILTER.key, "equity": [100]}
 
-    result = build_quant_comparison_response(quant, s2)
+    result = build_quant_comparison_response(quant, quant_on, s2, s2_on)
     result["comparison_runs"][0]["data"]["strategy"] = "changed"
     result["comparison_benchmark"]["equity"].append(101)
 
@@ -67,7 +93,14 @@ def test_server_quant_compare_calls_both_quant_strategies(monkeypatch) -> None:
         calls.append((strategy, top_n, rebalance, period, transaction_cost_bps, slippage_bps))
         return {
             "strategy": strategy,
-            "metrics": {"cagr": 1.0 if strategy == QUANT.key else 2.0},
+            "metrics": {
+                "cagr": {
+                    QUANT.key: 1.0,
+                    QUANT_ROBO_FILTER.key: 1.5,
+                    QUANT_S2.key: 2.0,
+                    QUANT_S2_ROBO_FILTER.key: 2.5,
+                }[strategy]
+            },
             "benchmark": [100, 101],
             "benchmark_dates": ["2025-01-31", "2025-02-28"],
             "bench_metrics": {"cagr": 0.5},
@@ -79,10 +112,17 @@ def test_server_quant_compare_calls_both_quant_strategies(monkeypatch) -> None:
 
     assert calls == [
         (QUANT.key, 7, "Q", "5y", 10.0, 5.0),
+        (QUANT_ROBO_FILTER.key, 7, "Q", "5y", 10.0, 5.0),
         (QUANT_S2.key, 7, "Q", "5y", 10.0, 5.0),
+        (QUANT_S2_ROBO_FILTER.key, 7, "Q", "5y", 10.0, 5.0),
     ]
     assert result["strategy"] == QUANT_COMPARE.key
-    assert [run["data"]["strategy"] for run in result["comparison_runs"]] == [QUANT.key, QUANT_S2.key]
+    assert [run["data"]["strategy"] for run in result["comparison_runs"]] == [
+        QUANT.key,
+        QUANT_ROBO_FILTER.key,
+        QUANT_S2.key,
+        QUANT_S2_ROBO_FILTER.key,
+    ]
 
 
 def test_server_quant_compare_returns_contextual_error(monkeypatch) -> None:

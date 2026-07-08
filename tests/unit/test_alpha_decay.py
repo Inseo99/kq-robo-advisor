@@ -3,7 +3,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from kq_tool.analyzer.alpha_decay import alpha_single, half_life_to_confidence
+from kq_tool.analyzer.alpha_decay import (
+    DECAY_FAMILY_PRIORS,
+    alpha_single,
+    classify_decay_quality,
+    half_life_to_confidence,
+)
 
 
 def _sample_close() -> pd.Series:
@@ -32,7 +37,45 @@ def test_alpha_single_returns_signal_metadata() -> None:
         assert "excluded_limit" in detail
         assert "active_window" in detail
         assert "direction" in detail
+        assert detail["decay_state"] in {"measured", "imputed", "neutral"}
+        assert "decay_reason_code" in detail
         assert detail["active_window"] == 5
+
+
+def test_decay_quality_marks_stable_large_sample_as_measured() -> None:
+    result = classify_decay_quality(
+        "RSI 과매도", {"count": 40, "half_life": 7.0, "is_active": True}
+    )
+
+    assert result["decay_state"] == "measured"
+    assert result["effective_half_life"] == 7.0
+    assert result["decay_basis"] == "half_life"
+
+
+def test_decay_quality_imputes_family_prior_for_small_active_sample() -> None:
+    result = classify_decay_quality(
+        "RSI 과매도", {"count": 4, "half_life": None, "is_active": True}
+    )
+
+    assert result["decay_state"] == "imputed"
+    assert result["decay_basis"] == "family_prior"
+    assert result["effective_half_life"] == DECAY_FAMILY_PRIORS["RSI 과매도"]["half_life"]
+
+
+def test_decay_quality_neutralizes_unstable_large_sample() -> None:
+    result = classify_decay_quality(
+        "RSI 과매도", {"count": 40, "half_life": None, "is_active": True}
+    )
+
+    assert result["decay_state"] == "neutral"
+    assert result["effective_half_life"] is None
+    assert result["decay_basis"] == "neutral"
+
+
+def test_decay_family_priors_do_not_depend_on_imputed_signal_results() -> None:
+    for prior in DECAY_FAMILY_PRIORS.values():
+        assert set(prior) == {"family", "half_life"}
+        assert prior["half_life"] > 0
 
 
 def test_alpha_single_defaults_to_operating_active_window() -> None:

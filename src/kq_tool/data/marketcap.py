@@ -11,6 +11,8 @@ from collections.abc import Callable, Iterable, Mapping
 
 import pandas as pd
 
+from .financial_pit import build_mcap_history_pit, latest_mcap_tickers_asof
+
 MCAP_KEY = "시가총액(티커-상장예정주식수 포함)(백만원)"
 
 
@@ -34,27 +36,12 @@ def build_top_marketcap_tickers(
     if fin_data is None:
         return tickers[:limit] if limit is not None else tickers
 
-    allowed = set(fin_tickers_cache) if fin_tickers_cache is not None else None
-    pairs: list[tuple[str, float]] = []
-    for ticker in tickers:
-        code = ticker_to_code(ticker)
-        try:
-            if allowed is not None and code not in allowed:
-                continue
-            sub = fin_data.loc[code]
-            if mcap_key not in sub.index:
-                continue
-            rows = sub.loc[mcap_key]
-            if isinstance(rows, pd.Series):
-                rows = rows.to_frame().T
-            values = pd.to_numeric(rows["value"], errors="coerce").dropna()
-            if not values.empty:
-                pairs.append((ticker, float(values.iloc[-1])))
-        except Exception:
-            continue
-
-    pairs.sort(key=lambda item: item[1], reverse=True)
-    result = [ticker for ticker, _ in pairs]
+    # Today's screener can use the latest observable market cap, but it must
+    # still respect publication lag.  Rank by code first, then map back to the
+    # Yahoo-style ticker used by the app.
+    code_to_ticker = {ticker_to_code(ticker): ticker for ticker in tickers}
+    result_codes = latest_mcap_tickers_asof(fin_data, top_n=None)
+    result = [code_to_ticker[code] for code in result_codes if code in code_to_ticker]
     return result[:limit] if limit is not None else result
 
 
@@ -67,42 +54,7 @@ def build_mcap_history(
 ) -> pd.DataFrame:
     """Build a date x ticker market-cap DataFrame from financial rows."""
 
-    if fin_data is None:
-        return pd.DataFrame()
-
-    allowed = set(fin_tickers_cache) if fin_tickers_cache is not None else None
-    series_by_ticker: dict[str, pd.Series] = {}
-
-    for ticker in universe:
-        code = ticker_to_code(ticker)
-        try:
-            if allowed is not None and code not in allowed:
-                continue
-            sub = fin_data.loc[code]
-            if mcap_key not in sub.index:
-                continue
-
-            rows = sub.loc[mcap_key]
-            if isinstance(rows, pd.Series):
-                rows = rows.to_frame().T
-
-            frame = rows[["date", "value"]].dropna()
-            if frame.empty:
-                continue
-
-            values = frame.set_index(pd.to_datetime(frame["date"]))["value"]
-            values = pd.to_numeric(values, errors="coerce").dropna()
-            if not values.empty:
-                series_by_ticker[ticker] = values
-        except Exception:
-            continue
-
-    if not series_by_ticker:
-        return pd.DataFrame()
-
-    history = pd.DataFrame(series_by_ticker)
-    history = history.apply(pd.to_numeric, errors="coerce")
-    return history.sort_index().ffill()
+    return build_mcap_history_pit(universe, ticker_to_code, fin_data, fin_tickers_cache)
 
 
 def get_top_mcap_at(mcap_history: pd.DataFrame | None, date: object, n: int = 200) -> list[str]:

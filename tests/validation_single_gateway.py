@@ -78,6 +78,11 @@ WARN_PATTERNS = [
     (r"read_excel|\.xlsx", "엑셀 접근 (재무 legacy - 한계 6번, 신규 사용 금지)"),
 ]
 
+EXCEL_ALLOWED_FILES = {
+    "convert.py",      # one-off source converter
+    "data_loader.py",  # sanctioned raw financial loader; PiT rules live above it
+}
+
 
 def strip_comments(src: str) -> str:
     lines = []
@@ -108,6 +113,8 @@ def scan_repo() -> tuple[list[str], list[str]]:
                 for m in re.finditer(pat, code):
                     line_no = code[:m.start()].count("\n") + 1
                     fails.append(f"{rel}:{line_no}  [{why}]")
+        if rel in EXCEL_ALLOWED_FILES:
+            continue
         for pat, why in WARN_PATTERNS:
             n = len(re.findall(pat, code))
             if n:
@@ -148,7 +155,7 @@ def main() -> int:
         print("       FAIL>", f)
     if warns:
         print(f"[WARN] G3: 엑셀 legacy 접근 {len(warns)}개 파일 "
-              "(재무 PiT 마이그레이션 대기 - 한계 6번)")
+              "(허용 로더 밖 신규 엑셀 접근)")
         for w in warns[:10]:
             print("       warn>", w)
 

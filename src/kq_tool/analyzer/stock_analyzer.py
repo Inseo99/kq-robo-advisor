@@ -10,6 +10,7 @@ from kq_tool.analyzer.alpha_decay import alpha_single
 from kq_tool.analyzer.chart import build_stock_chart
 from kq_tool.analyzer.indicators import atr, bollinger_bands, close_series, macd, rsi
 from kq_tool.analyzer.robo import confidence_weighted_robo, legacy_robo_score, score_to_signal
+from kq_tool.data.fundamental import refresh_market_sensitive_fundamentals
 
 
 def _rounded_price(value: float) -> float:
@@ -100,7 +101,7 @@ def analyze_stock_payload(
     robo_signal = score_to_signal(score)
     confidence_weighted = confidence_weighted_robo(alpha, s_rsi, s_macd, s_bb, s_ma20, s_ma60)
 
-    info = info or {}
+    info = refresh_market_sensitive_fundamentals(info or {}, current, current_date)
     return {
         "ticker": ticker,
         "name": name or ticker,
@@ -139,6 +140,7 @@ def analyze_stock_payload(
             "cw_signal": confidence_weighted["signal"],
             "confidence": confidence_weighted["confidence"],
             "exit_days": confidence_weighted["exit_days"],
+            "decay_state": confidence_weighted.get("decay_state"),
             "valid_days": confidence_weighted.get("valid_days"),
             "validity_basis": confidence_weighted.get("validity_basis"),
             "validity_text": confidence_weighted.get("validity_text"),
@@ -150,6 +152,15 @@ def analyze_stock_payload(
             "pbr": info.get("priceToBook"),
             "roe": info.get("returnOnEquity"),
             "mcap": info.get("marketCap"),
+            "source": info.get("fundamentalSource"),
+            "note": info.get("fundamental_note"),
+            "marketCap_basis": info.get("marketCap_basis"),
+            "marketCap_date": info.get("marketCap_date"),
+            "pe_basis": info.get("trailingPE_basis"),
+            "pbr_basis": info.get("priceToBook_basis"),
+            "roe_basis": info.get("returnOnEquity_basis"),
+            "fundamental_period_date": info.get("fundamentalPeriodDate"),
+            "fundamental_observable_date": info.get("fundamentalObservableDate"),
         },
     }
 
