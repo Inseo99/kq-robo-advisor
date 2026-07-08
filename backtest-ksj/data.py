@@ -63,6 +63,41 @@ def load_sector_etf_weekly() -> pd.DataFrame | None:
     return panel.sort_index()
 
 
+# ── 섹터 분류 / 밸류 지표 패널 (Fama-LSV 전략용) ─────────────────────────
+def load_sector_map() -> dict:
+    """ticker -> FnGuide Sector 딕셔너리 (stocks.parquet). 단일 스냅샷(비-PIT, 섹터는 거의 불변)."""
+    st = pd.read_parquet(os.path.join(C.CACHE, "stocks.parquet"))
+    sec = st["FnGuide Sector"]
+    return {str(k): (None if pd.isna(v) else str(v)) for k, v in sec.items()}
+
+
+def load_metric_panel(metric: str) -> pd.DataFrame:
+    """metric_{metric}.parquet(long: date,ticker,value)를 date×ticker 피벗 후 캐시. (PER/PBR 등)"""
+    cache_path = os.path.join(C.BT_DATA, f"panel_metric_{metric}.parquet")
+    if os.path.exists(cache_path):
+        return pd.read_parquet(cache_path)
+    src = os.path.join(C.CACHE, f"metric_{metric}.parquet")
+    df = pd.read_parquet(src)
+    df["date"] = pd.to_datetime(df["date"])
+    panel = df.pivot_table(index="date", columns="ticker", values="value", aggfunc="last").sort_index()
+    panel.to_parquet(cache_path)
+    return panel
+
+
+def load_fin_item(item: str, cache_key: str) -> pd.DataFrame:
+    """fin.parquet의 특정 아이템명을 date×ticker 피벗 후 ffill(PIT) + 캐시. (영업이익/자산총계 등)"""
+    cache_path = os.path.join(C.BT_DATA, f"panel_fin_{cache_key}.parquet")
+    if os.path.exists(cache_path):
+        return pd.read_parquet(cache_path)
+    fin = pd.read_parquet(os.path.join(C.CACHE, "fin.parquet"))
+    sub = fin[fin["아이템명"] == item].copy()
+    sub["date"] = pd.to_datetime(sub["date"])
+    panel = (sub.pivot_table(index="date", columns="ticker", values="value", aggfunc="last")
+                .sort_index().ffill())
+    panel.to_parquet(cache_path)
+    return panel
+
+
 # ── 시가총액 PIT ─────────────────────────────────────────────────────────
 def load_mcap_history() -> pd.DataFrame:
     """분기 시가총액을 date×ticker 로 피벗 후 ffill (룩어헤드 방지용 PIT)."""

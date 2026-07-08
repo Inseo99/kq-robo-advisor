@@ -30,6 +30,20 @@ MOM_LOOKBACK_M = 12          # 모멘텀 기준: t-12개월
 MOM_SKIP_M = 1               # 최근 1개월 제외 -> t-1개월
 MCAP_KEY = "시가총액(티커-상장예정주식수 포함)(백만원)"
 
+# ── 한국 섹터 Fama-LSV 전략 (2026-07-08 사용자 확정) ─────────────────────
+# US 섹터 SPDR(ETF) 12-1 모멘텀 상위 K섹터 -> 한국 FnGuide Sector로 매핑 ->
+# 섹터 내 Fama-LSV(PER·PBR 모두 양수, PER랭크+PBR랭크 저평가 순) 상위 7/5/3개 동일가중.
+US_SPDR_TO_KR_SECTOR = {
+    "XLK": "IT", "XLY": "경기소비재", "XLI": "산업재", "XLV": "의료",
+    "XLF": "금융", "XLB": "소재", "XLP": "필수소비재", "XLE": "에너지",
+    "XLU": "유틸리티", "XLC": "통신서비스",
+}
+LSV_TIERS = [7, 5, 3]        # 모멘텀 1위/2위/3위 섹터에서 선정할 종목 수 (Fama-LSV / Kang 공통)
+
+# Kang Super Quality (2026-07-08 사용자 확정): ①시총 하위 KANG_SMALL_PCT ②영업현금흐름>0 & 순익>0
+# ③GPA 대용 = 영업이익/자산총계(Operating Profitability) 높은 순. (매출총이익 미보유로 영업이익 대체)
+KANG_SMALL_PCT = 0.5         # 섹터 후보 중 시총 하위 50%만 (소형주 틸트)
+
 # ── 거래비용 / 현금 ──────────────────────────────────────────────────────
 COST_ONE_WAY = 0.0025        # 편도 0.25% (왕복 0.5%). cost = COST_ONE_WAY * Σ|Δw|
 CASH_ANNUAL = 0.02
@@ -67,6 +81,16 @@ FOLDS = [
 BT_START = "2014-01-01"
 BT_END = "2026-06-30"
 
+# ── ML 워크포워드 최적화용 폴드 (IS 넓힌 확장형, 3폴드; 2026-07-08 사용자 요청) ──
+# 4폴드(IS 5년 고정)의 과최적화를 완화하려고 IS를 2014 고정+확장(7/9/11년)으로 넓힘.
+# 데이터가 2014부터라 IS를 넓히면 OOS 시작이 2021로 밀림(스티칭 OOS=2021-01~2026-05).
+# optimize_us_sec_ml.py 전용. 기존 24전략(run.py)은 FOLDS(4폴드) 그대로 사용.
+ML_FOLDS = [
+    {"name": "Fold1", "is": ("2014-01-01", "2020-12-31"), "oos": ("2021-01-01", "2022-12-31")},
+    {"name": "Fold2", "is": ("2014-01-01", "2022-12-31"), "oos": ("2023-01-01", "2024-12-31")},
+    {"name": "Fold3", "is": ("2014-01-01", "2024-12-31"), "oos": ("2025-01-01", "2026-05-31")},
+]
+
 # ── 전략 정의 ────────────────────────────────────────────────────────────
 # variant:   s1(위험회피 없음) / s2(t1) / s3(t2)
 # cadence:   'M'(월간) / 'W'(주간)
@@ -102,6 +126,20 @@ STRATEGIES = [
     {"code": "s1w-sp500", "cadence": "W", "variant": "s1", "selection": "sp500", "label": "S1-주간 (S&P500)"},
     {"code": "s2w-sp500", "cadence": "W", "variant": "s2", "selection": "sp500", "label": "S2-주간 (S&P500 +t1)"},
     {"code": "s3w-sp500", "cadence": "W", "variant": "s3", "selection": "sp500", "label": "S3-주간 (S&P500 +t2)"},
+    # 종목선정 = 한국 섹터 Fama-LSV (US섹터 모멘텀 상위3 → 섹터내 저평가 7/5/3), s1/s2/s3 × 월간/주간 (2026-07-08)
+    {"code": "s1m_lsv", "cadence": "M", "variant": "s1", "selection": "krsec_lsv", "label": "S1-월간 (KR Fama-LSV)"},
+    {"code": "s2m_lsv", "cadence": "M", "variant": "s2", "selection": "krsec_lsv", "label": "S2-월간 (KR Fama-LSV +t1)"},
+    {"code": "s3m_lsv", "cadence": "M", "variant": "s3", "selection": "krsec_lsv", "label": "S3-월간 (KR Fama-LSV +t2)"},
+    {"code": "s1w_lsv", "cadence": "W", "variant": "s1", "selection": "krsec_lsv", "label": "S1-주간 (KR Fama-LSV)"},
+    {"code": "s2w_lsv", "cadence": "W", "variant": "s2", "selection": "krsec_lsv", "label": "S2-주간 (KR Fama-LSV +t1)"},
+    {"code": "s3w_lsv", "cadence": "W", "variant": "s3", "selection": "krsec_lsv", "label": "S3-주간 (KR Fama-LSV +t2)"},
+    # 종목선정 = 한국 섹터 Kang Super Quality (US섹터 모멘텀 상위3 → 소형·흑자·고수익성 7/5/3), s1/s2/s3 × 월간/주간
+    {"code": "s1m_kang", "cadence": "M", "variant": "s1", "selection": "krsec_kang", "label": "S1-월간 (KR Kang우량주)"},
+    {"code": "s2m_kang", "cadence": "M", "variant": "s2", "selection": "krsec_kang", "label": "S2-월간 (KR Kang우량주 +t1)"},
+    {"code": "s3m_kang", "cadence": "M", "variant": "s3", "selection": "krsec_kang", "label": "S3-월간 (KR Kang우량주 +t2)"},
+    {"code": "s1w_kang", "cadence": "W", "variant": "s1", "selection": "krsec_kang", "label": "S1-주간 (KR Kang우량주)"},
+    {"code": "s2w_kang", "cadence": "W", "variant": "s2", "selection": "krsec_kang", "label": "S2-주간 (KR Kang우량주 +t1)"},
+    {"code": "s3w_kang", "cadence": "W", "variant": "s3", "selection": "krsec_kang", "label": "S3-주간 (KR Kang우량주 +t2)"},
 ]
 
 # 선정방식별 사용 벤치마크: mom20/kd200(국내) -> KODEX200 / us_sec/sp500(미국) -> S&P500

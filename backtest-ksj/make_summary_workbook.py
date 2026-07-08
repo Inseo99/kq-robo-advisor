@@ -40,9 +40,12 @@ SELECTION_DESC = {
     "kd200": "KODEX200(069500) 1종목 단일 보유",
     "us_sec": "미국 섹터ETF 27종 유니버스 -> 12-1 모멘텀 상위3 동일가중 (2026-07-08 확정)",
     "sp500": "S&P500 1종목 단일 보유 (market_2000_2026.csv)",
+    "krsec_lsv": "US섹터 SPDR 모멘텀 상위3섹터->한국 FnGuide섹터 매핑->섹터내 Fama-LSV(PER·PBR 저평가) 7/5/3 동일가중",
+    "krsec_kang": "US섹터 모멘텀 상위3섹터->섹터내 Kang우량주(①시총하위50% ②영업현금흐름>0&순익>0 ③영업이익/자산 높은순) 7/5/3 동일가중",
 }
 # t2(s3)는 선정방식에 따라 기준지수가 다름(국내=KODEX200, 미국=S&P500)
-T2_INDEX_DESC = {"mom20": "KODEX200", "kd200": "KODEX200", "us_sec": "S&P500", "sp500": "S&P500"}
+T2_INDEX_DESC = {"mom20": "KODEX200", "kd200": "KODEX200", "us_sec": "S&P500", "sp500": "S&P500",
+                 "krsec_lsv": "KODEX200", "krsec_kang": "KODEX200"}
 VARIANT_DESC = {
     "s1": "위험회피 없음(항상 100% 투자)",
     "s2": "t1: (①S&P500<9M(39주)MA, ②VIX>18.6, ③미국신용스프레드 z(105거래일,~5개월)>1.78) "
@@ -56,6 +59,8 @@ EXEC_DESC = {
     "kd200": "익월 첫 거래일(월) / 익영업일(주) 종가 진입(시가 없음)",
     "us_sec": "지연 없이 평가일 종가 즉시 진입(시가 없음, 2026-07-08 확정)",
     "sp500": "지연 없이 평가일 종가 즉시 진입(시가 없음, 2026-07-08 확정)",
+    "krsec_lsv": "익월 첫 거래일 시초가 진입(한국 종목, 수정주가)",
+    "krsec_kang": "익월 첫 거래일 시초가 진입(한국 종목, 수정주가)",
 }
 
 
@@ -143,7 +148,8 @@ def bench_row(mdf, cadence, fold, segment, bench_code=BENCH):
 
 
 # ── 시트 1: 요약 ─────────────────────────────────────────────────────────
-SEL_SHORT = {"mom20": "모멘텀20", "kd200": "KODEX200", "us_sec": "미국섹터ETF", "sp500": "S&P500"}
+SEL_SHORT = {"mom20": "모멘텀20", "kd200": "KODEX200", "us_sec": "미국섹터ETF", "sp500": "S&P500",
+             "krsec_lsv": "KR섹터Fama-LSV", "krsec_kang": "KR섹터Kang우량주"}
 
 
 def build_summary_sheet(wb, mdf, period_records):
