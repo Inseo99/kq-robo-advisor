@@ -106,7 +106,11 @@ def conditional_table(labels: pd.Series, codes: list[str]) -> pd.DataFrame:
                 mean_monthly=round(grp["ret"].mean(), 5),
                 median_monthly=round(grp["ret"].median(), 5),
                 ann_return=round((1 + grp["ret"].mean()) ** 12 - 1, 4),
+                std_monthly=round(grp["ret"].std(ddof=1), 5) if n > 1 else None,
+                sharpe_ann=round(grp["ret"].mean() / grp["ret"].std(ddof=1) * (12 ** 0.5), 3)
+                           if n > 1 and grp["ret"].std(ddof=1) > 0 else None,
                 hit_rate=round((grp["ret"] > 0).mean(), 3),
+                worst_month=round(grp["ret"].min(), 5),
                 note="" if n >= 12 else f"표본 부족(n={n}) — 참고용",
             ))
     return pd.DataFrame(rows)
@@ -139,5 +143,5 @@ if __name__ == "__main__":
     pivot = table.pivot_table(index="code", columns="regime", values="ann_return")
     print((pivot * 100).round(1).to_string())
     print("\n[방법론] PiT 라벨 매칭(힌드사이트 차단) · 주간 전략은 월 복리 합성 ·")
-    print("        기술 통계(유의성 검정 아님) · n<12 국면은 note 컬럼에 표본 부족 표기 ·")
+    print("        탐색적 기술 통계 — 통계적 유의성 주장이 아니라 거시환경별 성과 특성의 존재 여부 탐색 · worst_month = 해당 국면 월수익률 최솟값(비연속 월이라 MDD 대신 사용) · Sharpe는 rf=0 월간 기준 연율화 · n<12 국면은 note 컬럼에 표본 부족 표기 ·")
     print("        2025~26 합성 데이터 구간 포함 시 절대치 주의 (--exclude-after 2024-12 로 배제 가능) (필요 시 해당 월 제외 후 재실행)")
