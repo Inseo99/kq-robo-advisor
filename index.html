@@ -2292,11 +2292,13 @@ function _rtColor(v){ return v>0 ? 'var(--gr)' : (v<0 ? 'var(--rd)' : 'var(--mu)
 function _rtChart(daily, intraday){
   if(!daily || daily.length < 2) return '';
   const W=940, H=180, PAD=34;
-  const navs = daily.map(p => p.nav);
+  const navs = daily.flatMap(p => p.bm != null ? [p.nav, p.bm] : [p.nav]);
   const mn = Math.min(...navs), mx = Math.max(...navs);
   const x = i => PAD + (W-2*PAD) * i / (daily.length-1);
   const y = v => H-PAD - (H-2*PAD) * (v-mn) / (mx-mn || 1);
   const pts = daily.map((p,i) => `${x(i).toFixed(1)},${y(p.nav).toFixed(1)}`).join(' ');
+  const bmPts = daily.some(p => p.bm != null)
+    ? daily.map((p,i) => `${x(i).toFixed(1)},${y(p.bm).toFixed(1)}`).join(' ') : null;
   let band = '';
   if(intraday && intraday.bands){
     const bm = Object.fromEntries(intraday.bands.map(b => [b.date, b]));
@@ -2313,9 +2315,10 @@ function _rtChart(daily, intraday){
     <line x1="${PAD}" y1="${y1}" x2="${W-PAD}" y2="${y1}" stroke="#8b96ad" stroke-width="0.6" stroke-dasharray="4 4"/>
     <text x="${W-PAD}" y="${y1-4}" text-anchor="end" font-size="9" fill="#8b96ad">원금(1.0)</text>
     ${band}
+    ${bmPts ? `<polyline points="${bmPts}" fill="none" stroke="#8b96ad" stroke-width="1" stroke-dasharray="5 4"/>` : ''}
     <polyline points="${pts}" fill="none" stroke="#58a6ff" stroke-width="1.4"/>
     ${ticks.map(i => `<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#8b96ad">${daily[i].date}</text>`).join('')}
-    <text x="${PAD}" y="14" font-size="9.5" fill="#8b96ad">일별 NAV (세전) · ${daily.length}거래일 · 음영 = 일중 고저 포락선(한계)</text>
+    <text x="${PAD}" y="14" font-size="9.5" fill="#8b96ad">일별 NAV (세전) · ${daily.length}거래일 · 음영 = 포락선 · 회색 점선 = 합성 BM</text>
     <text x="${W-PAD}" y="14" text-anchor="end" font-size="10" fill="${mx>=1?'#3fb950':'#f85149'}">고점 ${((mx-1)*100).toFixed(1)}% / 저점 ${((mn-1)*100).toFixed(1)}%</text>
   </svg>`;
 }
@@ -2332,7 +2335,8 @@ function renderRecoTrack(){
 
   el('rt-summary').innerHTML =
     `${d.n_months}개월 · 누적(세전) <b style="color:${_rtColor(d.cum_return)}">${_rtPct(d.cum_return)}</b>` +
-    ` · <b>누적(세후 근사) <span style="color:${_rtColor(d.cum_return_at)}">${_rtPct(d.cum_return_at)}</span></b><br>` +
+    ` · <b>누적(세후 근사) <span style="color:${_rtColor(d.cum_return_at)}">${_rtPct(d.cum_return_at)}</span></b>` +
+    ` · 합성 BM(고정 평균비중) ${_rtPct(d.bm_cum_return)} → <b>초과 <span style="color:${_rtColor(d.excess_vs_bm)}">${_rtPct(d.excess_vs_bm)}p</span></b><br>` +
     `종목 누적기여: ` + Object.entries(d.ticker_totals).map(([t,v]) =>
       `${d.ticker_names[t]||t} <span style="color:${_rtColor(v)}">${_rtPct(v)}</span>`).join(' · ');
 
@@ -2370,6 +2374,7 @@ function renderRecoTrack(){
   cv.style.display = 'block';
   cv.textContent = '⚠ ' + d.caveats + ' ⚠ ' + d.tax_caveats;
 }
+
 
 
 function saveHeatmapCsv(){

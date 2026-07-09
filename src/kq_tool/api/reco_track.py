@@ -31,7 +31,9 @@ TAX_RATE = 0.154
 
 _CAVEATS = ("추천 규칙 소급 적용 모의 성과(실제 추천 기록 아님) · "
             "ERC v1 가중치는 전 기간 산출로 완전한 OOS 아님 · 국면 라벨은 PiT(vintage) · "
-            "월초 완전 리밸런싱(군내 동일가중) 가정, 밴드·부분이동·비용 미반영")
+            "월초 완전 리밸런싱(군내 동일가중) 가정, 밴드·부분이동·비용 미반영 · "
+            "합성 BM: 4국면 ERC 비중의 단순평균을 전 기간 고정 적용한 동일 유니버스 지수 — "
+            "포트와 자산군·ETF·평균 노출이 같고 국면 타이밍만 없어, 초과성과 = 국면 전환 순기여")
 _TAX_CAVEATS = ("세후: 2026년 일반계좌 개인 기준 근사 — 채권·금·현금성 ETF 매매차익에 "
                 "배당소득세 15.4%(지방세 포함), 국내주식형 비과세, 손실 상계 없음(세목 특성), "
                 "완전 리밸런싱 가정상 매월 실현 과세(밴드 운용 대비 보수적) · "
@@ -109,6 +111,9 @@ def build_reco_track(months: int = 36) -> dict:
     except Exception as e:
         return {"error": f"모의 트랙 계산 실패: {e}"}
 
+    bm_class_w = weights.mean(axis=0)               # 4국면 단순평균 → 고정 정책비중
+    tw_bm = _ticker_weights(bm_class_w)
+
     month_ends = panel.resample("ME").last().index
     month_ends = [m for m in month_ends if m <= panel.index[-1]]  # 부분월 제외
     month_ends = month_ends[-(months + 1):]
@@ -116,7 +121,7 @@ def build_reco_track(months: int = 36) -> dict:
         return {"error": "가격 데이터 기간 부족"}
 
     rows, daily_points = [], []
-    cum = cum_at = 1.0
+    cum = cum_at = cum_bm = 1.0
     for i in range(1, len(month_ends)):
         m0, m1 = month_ends[i - 1], month_ends[i]
         past = labels[labels.index < m1]         # PiT: 해당 월 시작 이전 라벨
@@ -142,15 +147,20 @@ def build_reco_track(months: int = 36) -> dict:
 
         # 일별 NAV: 월초 수량 고정 평가 → 전월 누적계수에 연쇄 (정합 계약 성립)
         rel = (window / base).mul(pd.Series(tw)).sum(axis=1)   # 월초=1 기준 경로
-        month_pts = [{"date": dt.strftime("%Y-%m-%d"), "nav": round(cum * float(v), 6)}
-                     for dt, v in rel.items()]
+        rel_bm = (window / base).mul(pd.Series(tw_bm)).sum(axis=1)
+        month_pts = [{"date": dt.strftime("%Y-%m-%d"), "nav": round(cum * float(v), 6),
+                      "bm": round(cum_bm * float(b), 6)}
+                     for (dt, v), b in zip(rel.items(), rel_bm.values)]
         daily_points.extend(month_pts)
+        bm_ret = float(rel_bm.iloc[-1]) - 1.0
 
         cum *= (1.0 + port)
         cum_at *= (1.0 + port - tax)
+        cum_bm *= (1.0 + bm_ret)
         rows.append(dict(
             month=m1.strftime("%Y-%m"), regime=regime,
             port_return=round(port, 6), port_return_at=round(port - tax, 6),
+            bm_return=round(bm_ret, 6), cum_bm=round(cum_bm - 1.0, 6),
             tax_paid=tax,
             cum_return=round(cum - 1.0, 6), cum_return_at=round(cum_at - 1.0, 6),
             weights={a: round(float(weights.loc[regime].get(a, 0.0)), 4) for a in ASSET_TICKERS},
@@ -169,6 +179,9 @@ def build_reco_track(months: int = 36) -> dict:
     return dict(
         rows=rows, n_months=len(rows),
         cum_return=rows[-1]["cum_return"], cum_return_at=rows[-1]["cum_return_at"],
+        bm_cum_return=rows[-1]["cum_bm"],
+        excess_vs_bm=round(rows[-1]["cum_return"] - rows[-1]["cum_bm"], 6),
+        bm_weights={a: round(float(bm_class_w.get(a, 0.0)), 4) for a in ASSET_TICKERS},
         total_tax=round(sum(r["tax_paid"] for r in rows), 6),
         contrib_totals=contrib_sum, ticker_totals=ticker_sum,
         daily=daily_points,
