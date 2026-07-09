@@ -20,6 +20,20 @@ _STATUS_LABEL = {
 }
 
 
+def _params_of(profile) -> dict[str, object]:
+    """Return display-only preset parameters for the selected profile."""
+
+    return {
+        "regime_erc_n0": profile.regime_erc_n0,
+        "band_abs": profile.rebalance_abs_band,
+        "band_rel": profile.rebalance_rel_band,
+        "regime_shift_ratio": profile.regime_shift_fraction,
+        "asset_cap": profile.max_asset_cap,
+        "promote_after": profile.promote_after,
+        "validation_note": profile.validation_note,
+    }
+
+
 def _normalize_requested_key(requested_key: str | None) -> str:
     return str(requested_key or "neutral").strip().lower()
 
@@ -43,6 +57,7 @@ def resolve_profile_request(requested_key: str | None) -> dict[str, object]:
                 f"'{req_key}'는 정의되지 않은 프리셋입니다. "
                 f"기본값인 {applied.label} 기준으로 산출되었습니다."
             ),
+            "params": None,
         }
 
     demoted = requested.key != applied.key
@@ -63,6 +78,7 @@ def resolve_profile_request(requested_key: str | None) -> dict[str, object]:
         "applied_label": applied.label,
         "demoted": demoted,
         "notice": notice,
+        "params": _params_of(requested),
     }
 
 
@@ -81,3 +97,4 @@ def list_profiles_for_ui() -> list[dict[str, object]]:
             }
         )
     return items
+

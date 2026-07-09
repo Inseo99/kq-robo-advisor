@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -1897,6 +1897,24 @@ function renderProfileNotice(profile){
     notice.style.border = '1px solid var(--gr)';
     notice.style.color = 'var(--gr)';
     notice.textContent = profile.notice;
+  }
+
+  const goals = {
+    stable: '목표: 변동성 연 5% · MDD 10% 이내 (검증 기준) — 검증 통과 시 활성화',
+    neutral: '현행 운용 기준 (E2E 게이트 통과 구성)',
+    aggressive: '목표: 위험 허용 확대, Sharpe 기준 상향 (검증 기준) — 검증 통과 시 활성화',
+  };
+  if(profile.params){
+    const p = profile.params;
+    const bandAbs = p.band_abs != null ? (Number(p.band_abs) * 100).toFixed(0) + '%p' : '-';
+    const bandRel = p.band_rel != null ? (Number(p.band_rel) * 100).toFixed(0) + '%' : '-';
+    const shift = p.regime_shift_ratio != null ? (Number(p.regime_shift_ratio) * 100).toFixed(0) + '%' : '-';
+    const cap = p.asset_cap != null ? (Number(p.asset_cap) * 100).toFixed(0) + '%' : '-';
+    const n0 = p.regime_erc_n0 != null ? ` · ERC n0 ${Number(p.regime_erc_n0).toFixed(0)}` : '';
+    notice.innerHTML += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(139,150,173,.25);color:var(--mu);font-size:10.5px;line-height:1.7">
+      <b style="color:inherit">${profile.requested_label} 정의</b> ·
+      리밸런싱 밴드 ${bandAbs}/${bandRel} · 국면전환 이동 ${shift} · 자산 상한 ${cap}${n0}<br>
+      ${goals[profile.requested] || p.validation_note || ''}</div>`;
   }
 }
 
