@@ -58,3 +58,36 @@ def test_analyze_stock_payload_can_use_live_price_override() -> None:
     assert payload["cur_source"] == "실시간"
     assert payload["cur_date"] == "2026-06-28"
     assert payload["robo"]["entry"] == 70_000
+
+
+def test_analyze_stock_payload_refreshes_price_sensitive_fundamentals() -> None:
+    payload = analyze_stock_payload(
+        "005930.KS",
+        _ohlcv(),
+        current_price=70_000,
+        current_date="2026-06-28",
+        info={
+            "trailingPE": 7.57,
+            "priceToBook": 1.47,
+            "returnOnEquity": 0.115,
+            "marketCap": 637_500_000_000_000,
+            "sharesOutstanding": 1_000,
+            "equity": 10_000_000,
+            "netIncomeTTM": 5_000_000,
+            "fundamentalSource": "excel_pit",
+            "fundamentalPeriodDate": "2026-03-31",
+            "fundamentalObservableDate": "2026-05-15",
+            "returnOnEquity_basis": "latest_reported_quarter",
+        },
+    )
+
+    assert payload["fund"]["mcap"] == 70_000_000
+    assert payload["fund"]["pbr"] == 7.0
+    assert payload["fund"]["pe"] == 14.0
+    assert payload["fund"]["roe"] == 0.115
+    assert payload["fund"]["marketCap_basis"] == "current_price_x_shares"
+    assert payload["fund"]["marketCap_date"] == "2026-06-28"
+    assert payload["fund"]["fundamental_period_date"] == "2026-03-31"
+    assert payload["fund"]["fundamental_observable_date"] == "2026-05-15"
+    assert payload["fund"]["roe_basis"] == "latest_reported_quarter"
+    assert "현재가" in payload["fund"]["note"]

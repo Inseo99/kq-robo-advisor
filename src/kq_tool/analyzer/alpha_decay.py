@@ -11,6 +11,17 @@ from scipy.optimize import curve_fit
 from kq_tool.analyzer.indicators import bollinger_bands, macd, rsi
 from kq_tool.config import HORIZONS, SIGNAL_DIRECTION
 
+MIN_DECAY_EVENTS = 36
+
+DECAY_FAMILY_PRIORS = {
+    "RSI 과매도": {"family": "mean_reversion", "half_life": 10.0},
+    "RSI 과매수": {"family": "mean_reversion", "half_life": 10.0},
+    "BB 하단터치": {"family": "mean_reversion", "half_life": 12.0},
+    "BB 상단터치": {"family": "mean_reversion", "half_life": 12.0},
+    "MACD 골든크로스": {"family": "trend", "half_life": 15.0},
+    "MACD 데드크로스": {"family": "trend", "half_life": 15.0},
+}
+
 
 def _exp_decay(t: np.ndarray, a: float, lam: float, c: float) -> np.ndarray:
     return a * np.exp(-lam * t) + c
@@ -34,6 +45,90 @@ def half_life_to_confidence(half_life: float | None, count: int) -> float:
     elif count < 20:
         confidence *= 0.95
     return round(min(10.0, max(0.0, confidence)), 1)
+
+
+def classify_decay_quality(
+    signal_name: str,
+    detail: Mapping[str, object],
+    min_events: int = MIN_DECAY_EVENTS,
+) -> dict[str, object]:
+    """Classify Alpha Decay usability into measured/substituted/neutral.
+
+    The operating rule is deliberately conservative:
+      - measured: enough events and a stable fitted half-life
+      - imputed: not enough events, so use a signal-family prior
+      - neutral: enough events but unstable, so do not apply decay adjustment
+    """
+
+    count = int(detail.get("count") or 0)
+    raw_half_life = detail.get("half_life")
+    half_life = float(raw_half_life) if raw_half_life is not None else None
+    prior = DECAY_FAMILY_PRIORS.get(signal_name)
+    is_active = bool(detail.get("is_active"))
+
+    if half_life is not None and count >= min_events:
+        confidence = half_life_to_confidence(half_life, count)
+        return {
+            "decay_state": "measured",
+            "decay_basis": "half_life",
+            "decay_reason_code": "measured_half_life",
+            "decay_reason_data": {"count": count, "min_events": min_events},
+            "decay_family": prior["family"] if prior else None,
+            "effective_half_life": round(half_life, 1),
+            "raw_half_life": round(half_life, 1),
+            "decay_confidence": confidence,
+            "min_decay_events": min_events,
+        }
+
+    if count < min_events:
+        if prior and (is_active or count > 0):
+            prior_half_life = float(prior["half_life"])
+            confidence = round(half_life_to_confidence(prior_half_life, min_events) * 0.75, 1)
+            return {
+                "decay_state": "imputed",
+                "decay_basis": "family_prior",
+                "decay_reason_code": "insufficient_family_prior",
+                "decay_reason_data": {
+                    "count": count,
+                    "min_events": min_events,
+                    "family": prior["family"],
+                },
+                "decay_family": prior["family"],
+                "effective_half_life": round(prior_half_life, 1),
+                "raw_half_life": round(half_life, 1) if half_life is not None else None,
+                "decay_confidence": confidence,
+                "min_decay_events": min_events,
+            }
+        return {
+            "decay_state": "neutral",
+            "decay_basis": "neutral",
+            "decay_reason_code": "insufficient_no_active_signal",
+            "decay_reason_data": {"count": count, "min_events": min_events},
+            "decay_family": prior["family"] if prior else None,
+            "effective_half_life": None,
+            "raw_half_life": round(half_life, 1) if half_life is not None else None,
+            "decay_confidence": 5.0,
+            "min_decay_events": min_events,
+        }
+
+    return {
+        "decay_state": "neutral",
+        "decay_basis": "neutral",
+        "decay_reason_code": "unstable_decay_curve",
+        "decay_reason_data": {"count": count, "min_events": min_events},
+        "decay_family": prior["family"] if prior else None,
+        "effective_half_life": None,
+        "raw_half_life": round(half_life, 1) if half_life is not None else None,
+        "decay_confidence": 5.0,
+        "min_decay_events": min_events,
+    }
+
+
+def attach_decay_quality(signal_name: str, detail: dict) -> dict:
+    """Return detail with the three-state decay quality fields attached."""
+
+    detail.update(classify_decay_quality(signal_name, detail))
+    return detail
 
 
 def alpha_single(
@@ -121,7 +216,7 @@ def alpha_single(
                 quality_values.append(float(quality.loc[dt]))
 
         if len(dates) < 5:
-            result[signal_name] = {
+            result[signal_name] = attach_decay_quality(signal_name, {
                 "count": int(len(dates)),
                 "raw_count": int(len(raw_dates)),
                 "quality_count": int(len(event_dates)),
@@ -139,7 +234,7 @@ def alpha_single(
                 "active_window": active_window,
                 "direction": direction,
                 "status": "표본 부족",
-            }
+            })
             continue
 
         horizon_returns = {}
@@ -178,7 +273,7 @@ def alpha_single(
             except Exception:
                 pass
 
-        result[signal_name] = {
+        result[signal_name] = attach_decay_quality(signal_name, {
             "count": int(len(dates)),
             "raw_count": int(len(raw_dates)),
             "quality_count": int(len(event_dates)),
@@ -197,7 +292,7 @@ def alpha_single(
             "active_window": active_window,
             "direction": direction,
             "status": "측정됨" if half_life is not None else "감쇠 불안정",
-        }
+        })
     return result
 
 

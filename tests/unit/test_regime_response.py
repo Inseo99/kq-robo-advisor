@@ -21,7 +21,9 @@ class EmptyModel:
         return None
 
 
-def test_build_regime_ai_payload_uses_fallback_when_model_is_not_trained() -> None:
+def test_build_regime_ai_payload_uses_fallback_when_model_is_not_trained(monkeypatch) -> None:
+    monkeypatch.setattr("kq_tool.regime.response.build_payload", lambda: (_ for _ in ()).throw(RuntimeError("no ui payload")))
+
     payload = build_regime_ai_payload(None, {"current": "리플레이션"})
 
     assert payload["current"] == "리플레이션"
@@ -29,7 +31,9 @@ def test_build_regime_ai_payload_uses_fallback_when_model_is_not_trained() -> No
     assert payload["model_status"] == "not_trained"
 
 
-def test_build_regime_ai_payload_adds_model_metadata() -> None:
+def test_build_regime_ai_payload_adds_model_metadata(monkeypatch) -> None:
+    monkeypatch.setattr("kq_tool.regime.response.build_payload", lambda: (_ for _ in ()).throw(RuntimeError("no ui payload")))
+
     payload = build_regime_ai_payload(
         FakeModel(),
         {},
@@ -44,7 +48,9 @@ def test_build_regime_ai_payload_adds_model_metadata() -> None:
     assert payload["regime_order"] == ["골디락스", "리플레이션"]
 
 
-def test_build_regime_ai_payload_raises_when_prediction_fails() -> None:
+def test_build_regime_ai_payload_raises_when_prediction_fails(monkeypatch) -> None:
+    monkeypatch.setattr("kq_tool.regime.response.build_payload", lambda: (_ for _ in ()).throw(RuntimeError("no ui payload")))
+
     with pytest.raises(RuntimeError, match="예측 실패"):
         build_regime_ai_payload(EmptyModel(), {})
 

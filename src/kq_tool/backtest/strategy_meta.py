@@ -14,13 +14,17 @@ class StrategyDescriptor:
 
 QUANT = StrategyDescriptor("quant", "퀀트(모멘텀)", "#388bfd")
 QUANT_S2 = StrategyDescriptor("quant_s2", "퀀트(S2모멘텀)", "#3fb950")
-QUANT_COMPARE = StrategyDescriptor("quant_compare", "퀀트 비교", "#388bfd")
+QUANT_ROBO_FILTER = StrategyDescriptor("quant_robo_filter", "퀀트+로보필터", "#79c0ff")
+QUANT_S2_ROBO_FILTER = StrategyDescriptor("quant_s2_robo_filter", "S2+로보필터", "#56d364")
+QUANT_COMPARE = StrategyDescriptor("quant_compare", "로보필터 비교", "#388bfd")
 ROBO = StrategyDescriptor("robo", "로보신호", "#bc8cff")
 KOSPI_BENCHMARK = StrategyDescriptor("kospi", "KOSPI", "#8b949e")
 
 STRATEGY_ALIASES = {
     "momentum": QUANT.key,
     "s2_momentum": QUANT_S2.key,
+    "quant_on": QUANT_ROBO_FILTER.key,
+    "quant_s2_on": QUANT_S2_ROBO_FILTER.key,
 }
 
 STRATEGY_DESCRIPTORS = {
@@ -28,6 +32,8 @@ STRATEGY_DESCRIPTORS = {
     for item in (
         QUANT,
         QUANT_S2,
+        QUANT_ROBO_FILTER,
+        QUANT_S2_ROBO_FILTER,
         QUANT_COMPARE,
         ROBO,
         KOSPI_BENCHMARK,

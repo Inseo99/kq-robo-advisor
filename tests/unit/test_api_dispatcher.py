@@ -27,7 +27,7 @@ def _services():
             "slippage_bps": slippage_bps,
         },
         "regime_ai": lambda: {"regime": True},
-        "recommend_portfolio": lambda: {"recommend": True},
+        "recommend_portfolio": lambda *a: {"recommend": True},
         "market_report": lambda: {"market_report": True},
     }
 
@@ -208,7 +208,7 @@ def test_handle_legacy_get_routes_file_json_actions_and_not_found() -> None:
         "stratbt": lambda query: calls.append(("stratbt", query["s"][0], None)),
         "macro_payload": {"macro": True},
         "regime_ai": lambda: calls.append(("regime_ai", None, None)),
-        "recommend_portfolio": lambda: calls.append(("recommend", None, None)),
+        "recommend_portfolio": lambda *a: calls.append(("recommend", None, None)),
         "market_report": lambda: calls.append(("market_report", None, None)),
         "health": lambda: {"health": True},
     }
@@ -244,7 +244,7 @@ def test_handle_legacy_get_routes_zero_arg_endpoint_actions() -> None:
         "stratbt": lambda query: None,
         "macro_payload": {},
         "regime_ai": lambda: calls.append("regime_ai"),
-        "recommend_portfolio": lambda: calls.append("recommend_portfolio"),
+        "recommend_portfolio": lambda *a: calls.append("recommend_portfolio"),
         "market_report": lambda: calls.append("market_report"),
         "health": lambda: {},
     }

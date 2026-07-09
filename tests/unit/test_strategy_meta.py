@@ -3,7 +3,9 @@ from __future__ import annotations
 from kq_tool.backtest.strategy_meta import (
     KOSPI_BENCHMARK,
     QUANT,
+    QUANT_ROBO_FILTER,
     QUANT_S2,
+    QUANT_S2_ROBO_FILTER,
     normalize_strategy_key,
     strategy_descriptor,
 )
@@ -13,6 +15,8 @@ def test_normalize_strategy_key_maps_aliases() -> None:
     assert normalize_strategy_key(None) == QUANT.key
     assert normalize_strategy_key("momentum") == QUANT.key
     assert normalize_strategy_key("s2_momentum") == QUANT_S2.key
+    assert normalize_strategy_key("quant_on") == QUANT_ROBO_FILTER.key
+    assert normalize_strategy_key("quant_s2_on") == QUANT_S2_ROBO_FILTER.key
     assert normalize_strategy_key("robo") == "robo"
 
 

@@ -76,7 +76,7 @@ def test_run_strategy_backtest_action_parses_query_and_delegates_to_json_action(
     assert calls == [("json_action", None), ("stratbt", ("robo", 7, "Q", "5y", 10.0, 5.0))]
 
 
-def test_run_strategy_backtest_action_preserves_legacy_defaults() -> None:
+def test_run_strategy_backtest_action_uses_standard_trading_cost_defaults() -> None:
     result = run_strategy_backtest_action(
         {},
         run_strategy_backtest=lambda strategy, top_n, rebalance, period, transaction_cost_bps, slippage_bps: {
@@ -95,8 +95,8 @@ def test_run_strategy_backtest_action_preserves_legacy_defaults() -> None:
         "top_n": 5,
         "rebalance": "M",
         "period": "3y",
-        "tc": 0.0,
-        "slip": 0.0,
+        "tc": 10.0,
+        "slip": 5.0,
     }
 
 

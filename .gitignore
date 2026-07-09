@@ -18,3 +18,10 @@ tests/analysis_outputs/
 data/prices/
 
 data/state/
+
+# backtest-ksj: data.py가 자동 재생성하는 파생 캐시(피벗 패널, PIT 시총). 원본은 data/cache/
+backtest-ksj/data/*.parquet
+
+# Office 임시 잠금 파일 (엑셀 열려있을 때 생성)
+~$*
+data/cache/
