@@ -77,7 +77,7 @@ REGIME_DESC = {
 # ─────────────────────────────────────────────────────────────────
 #  1) 국면 라벨링 — 매크로 데이터 → 4국면 자동 라벨
 # ─────────────────────────────────────────────────────────────────
-def make_regime_labels(macro_data, return_features=False):
+def make_regime_labels(macro_data, return_features=False, inflation_axis="auto"):
     """
     매크로 데이터로부터 시점별 국면 라벨 생성.
     macro_data: data_loader.load_macro() 결과 dict
@@ -89,10 +89,13 @@ def make_regime_labels(macro_data, return_features=False):
       - cpi_proxy:  스프레드 역수 (인플레 프록시) — CPI 데이터 없을 때
       - usd_change: USD 환율 전분기대비 변화율
       - export_yoy: 수출 전년대비 증가율 (있으면)
+      - cpi_yoy:    CPI 전년대비 (macro_data['cpi'] 제공 시)
 
     라벨 룰:
       성장↑ if gdp_growth > 중앙값 else 성장↓
-      물가↑ if spread < 중앙값  else 물가↓  (스프레드 좁아짐 = 긴축/인플레)
+      물가↑ (V2, 기본): cpi_yoy > 중앙값   — CPI 실측 (macro_data에 'cpi' 있을 때)
+      물가↑ (V1, 폴백): spread < 중앙값    — 스프레드 프록시 (CPI 없을 때)
+      inflation_axis: "auto"(기본, CPI 있으면 V2) | "cpi"(강제) | "spread"(강제)
       → 4국면 매핑
     """
     if not macro_data:
@@ -144,12 +147,31 @@ def make_regime_labels(macro_data, return_features=False):
             fx_s = fx_df[usd_cols[0]].dropna().resample('QE').last()
             usd_change_q = fx_s.pct_change()
 
+    # CPI (물가 축 V2 — 실측)
+    cpi_df = macro_data.get('cpi')
+    if cpi_df is None:
+        cpi_df = macro_data.get('inflation')
+    cpi_q = None
+    if cpi_df is not None:
+        cpi_num = cpi_df.select_dtypes(include=[np.number]).columns.tolist()
+        if cpi_num:
+            cpi_s = cpi_df[cpi_num[0]].dropna()
+            cpi_s.index = pd.to_datetime(cpi_s.index)
+            cpi_q = cpi_s.resample('QE').last().ffill()
+    use_cpi = (inflation_axis == "cpi") or (inflation_axis == "auto" and cpi_q is not None)
+    if inflation_axis == "cpi" and cpi_q is None:
+        return pd.DataFrame()   # CPI 강제인데 데이터 없음 — 명시적 실패
+
     # 정렬 & 결합
-    df = pd.DataFrame({
+    cols = {
         'gdp_growth': gdp_q,
         'spread':     spread_q,
         'usd_change': usd_change_q,
-    }).dropna(subset=['gdp_growth', 'spread'])
+    }
+    if cpi_q is not None:
+        cols['cpi_yoy'] = cpi_q
+    need = ['gdp_growth', 'spread'] + (['cpi_yoy'] if use_cpi else [])
+    df = pd.DataFrame(cols).dropna(subset=need)
     df['usd_change'] = df['usd_change'].fillna(0)
 
     if df.empty:
@@ -157,9 +179,11 @@ def make_regime_labels(macro_data, return_features=False):
 
     # 국면 라벨링 (중앙값 기준)
     growth_med  = df['gdp_growth'].median()
-    spread_med  = df['spread'].median()
-    df['growth_up']    = df['gdp_growth'] > growth_med
-    df['inflation_up'] = df['spread'] < spread_med   # 스프레드 작아짐 = 인플레/긴축
+    df['growth_up'] = df['gdp_growth'] > growth_med
+    if use_cpi:
+        df['inflation_up'] = df['cpi_yoy'] > df['cpi_yoy'].median()   # V2: CPI 실측
+    else:
+        df['inflation_up'] = df['spread'] < df['spread'].median()     # V1: 프록시 (스프레드 축소 = 긴축/인플레)
 
     def label_row(row):
         if row['growth_up'] and not row['inflation_up']:    return '골디락스'
@@ -169,7 +193,8 @@ def make_regime_labels(macro_data, return_features=False):
     df['regime'] = df.apply(label_row, axis=1)
 
     if return_features:
-        return df[['gdp_growth', 'spread', 'usd_change', 'regime']]
+        feat = ['gdp_growth', 'spread', 'usd_change'] + (['cpi_yoy'] if 'cpi_yoy' in df.columns else [])
+        return df[feat + ['regime']]
     return df['regime']
 
 
