@@ -33,15 +33,15 @@ def test_parse_strategy_backtest_params_includes_trading_frictions() -> None:
     assert params.slippage_bps == 5.0
 
 
-def test_parse_strategy_backtest_params_defaults_costs_to_zero() -> None:
+def test_parse_strategy_backtest_params_defaults_to_standard_trading_costs() -> None:
     params = parse_strategy_backtest_params({})
 
     assert params.strategy == "quant"
     assert params.top_n == 5
     assert params.rebalance == "M"
     assert params.period == "3y"
-    assert params.transaction_cost_bps == 0.0
-    assert params.slippage_bps == 0.0
+    assert params.transaction_cost_bps == 10.0
+    assert params.slippage_bps == 5.0
 
 
 def test_server_keeps_param_parsing_inside_api_action_helpers() -> None:

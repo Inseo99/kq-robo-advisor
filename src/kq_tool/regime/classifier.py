@@ -25,6 +25,7 @@ def _snapshot_from_ui_payload() -> dict:
         "reeval_flag": ui["reeval_flag"],
         "reeval_reasons": ui["reeval_reasons"],
         "stay_prob_next_quarter": ui["stay_prob_next_quarter"],
+        "transition_matrix": ui.get("transition_matrix"),
         "shadow_ledger": ui.get("shadow_ledger"),
     }
 

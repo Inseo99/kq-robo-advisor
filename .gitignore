@@ -24,3 +24,4 @@ backtest-ksj/data/*.parquet
 
 # Office 임시 잠금 파일 (엑셀 열려있을 때 생성)
 ~$*
+data/cache/
