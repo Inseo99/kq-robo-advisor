@@ -36,11 +36,14 @@ def active_mask(adj_close_raw: pd.DataFrame, date, tol_days: int = 10) -> pd.Ser
 
 
 # ── 모멘텀 선정 ──────────────────────────────────────────────────────────
-def momentum(close_ff: pd.DataFrame, eval_date) -> pd.Series:
-    """12-1 모멘텀: P(t-1M)/P(t-12M) - 1."""
+def momentum(close_ff: pd.DataFrame, eval_date,
+             lookback_m: int | None = None, skip_m: int | None = None) -> pd.Series:
+    """모멘텀: P(t-skip_m)/P(t-lookback_m) - 1. 기본 12-1(lookback 12M, skip 1M)."""
+    lb = C.MOM_LOOKBACK_M if lookback_m is None else lookback_m
+    sk = C.MOM_SKIP_M if skip_m is None else skip_m
     d = pd.Timestamp(eval_date)
-    p1 = asof_row(close_ff, d - relativedelta(months=C.MOM_SKIP_M))
-    p12 = asof_row(close_ff, d - relativedelta(months=C.MOM_LOOKBACK_M))
+    p1 = asof_row(close_ff, d - relativedelta(months=sk))
+    p12 = asof_row(close_ff, d - relativedelta(months=lb))
     if p1 is None or p12 is None:
         return pd.Series(dtype=float)
     mom = p1 / p12 - 1.0
@@ -48,10 +51,11 @@ def momentum(close_ff: pd.DataFrame, eval_date) -> pd.Series:
     return mom
 
 
-def select_top(close_ff, adj_close_raw, eval_date, pit_universe, n=None) -> list[str]:
+def select_top(close_ff, adj_close_raw, eval_date, pit_universe, n=None,
+               lookback_m=None, skip_m=None) -> list[str]:
     """PIT 유니버스 ∩ 현재거래중 종목에서 모멘텀 상위 n 코드."""
     n = n or C.TOP_N
-    mom = momentum(close_ff, eval_date)
+    mom = momentum(close_ff, eval_date, lookback_m, skip_m)
     if mom.empty:
         return []
     act = active_mask(adj_close_raw, eval_date)
@@ -62,17 +66,127 @@ def select_top(close_ff, adj_close_raw, eval_date, pit_universe, n=None) -> list
     return cand.nlargest(min(n, len(cand))).index.tolist()
 
 
+# ── 한국 섹터 Fama-LSV 선정 ──────────────────────────────────────────────
+def select_krsec_lsv(eval_date, sector_etf_ff, universe, sector_map,
+                     per_ff, pbr_ff, adj_close_raw, spdr_map=None, tiers=None) -> list[str]:
+    """US 섹터 SPDR 12-1 모멘텀 상위 K섹터 -> 한국 섹터 매핑 -> 섹터내 Fama-LSV 저평가 tiers개.
+
+    Fama-LSV: PER·PBR 모두 양수 종목 중 (PER 랭크 + PBR 랭크)가 작은(저평가) 순.
+    """
+    spdr_map = spdr_map or C.US_SPDR_TO_KR_SECTOR
+    tiers = tiers or C.LSV_TIERS
+
+    # 1) US 섹터 SPDR 모멘텀 상위 K섹터
+    mom = momentum(sector_etf_ff, eval_date)
+    mom = mom[[t for t in mom.index if t in spdr_map]]
+    if mom.empty:
+        return []
+    top_spdrs = mom.nlargest(min(len(tiers), len(mom))).index.tolist()
+
+    # 2) 밸류 지표 asof + 현재거래중 마스크
+    per_row = asof_row(per_ff, eval_date)
+    pbr_row = asof_row(pbr_ff, eval_date)
+    if per_row is None or pbr_row is None:
+        return []
+    act = active_mask(adj_close_raw, eval_date)
+
+    selected = []
+    for spdr, k in zip(top_spdrs, tiers):
+        ksec = spdr_map[spdr]
+        rows = []
+        for t in universe:                                 # 시총순 리스트(결정적; set 반복은 해시 랜덤화로 비결정적)
+            if sector_map.get(t) != ksec or not act.get(t, False):
+                continue
+            pe = per_row.get(t)
+            pb = pbr_row.get(t)
+            if pe is None or pb is None or not (pe > 0) or not (pb > 0):
+                continue                                   # PER·PBR 모두 양수만
+            rows.append((t, float(pe), float(pb)))
+        if not rows:
+            continue
+        dfc = pd.DataFrame(rows, columns=["ticker", "per", "pbr"])
+        dfc["score"] = dfc["per"].rank() + dfc["pbr"].rank()   # 작을수록 저평가
+        picked = dfc.nsmallest(min(k, len(dfc)), "score")["ticker"].tolist()
+        selected += picked
+    return selected
+
+
+def select_krsec_kang(eval_date, sector_etf_ff, universe, sector_map,
+                      mcap_ff, opinc_ff, assets_ff, ocf_ff, ni_ff, adj_close_raw,
+                      spdr_map=None, tiers=None, small_pct=None) -> list[str]:
+    """US 섹터 SPDR 모멘텀 상위 K섹터 -> 한국 섹터 -> Kang Super Quality tiers개.
+
+    Kang: ①섹터 후보 중 시총 하위 small_pct(소형) ②영업현금흐름>0 & 순익>0(흑자)
+          ③GPA 대용=영업이익/자산총계(Operating Profitability) 높은 순.
+    """
+    spdr_map = spdr_map or C.US_SPDR_TO_KR_SECTOR
+    tiers = tiers or C.LSV_TIERS
+    small_pct = C.KANG_SMALL_PCT if small_pct is None else small_pct
+
+    mom = momentum(sector_etf_ff, eval_date)
+    mom = mom[[t for t in mom.index if t in spdr_map]]
+    if mom.empty:
+        return []
+    top_spdrs = mom.nlargest(min(len(tiers), len(mom))).index.tolist()
+
+    mc = asof_row(mcap_ff, eval_date)
+    op = asof_row(opinc_ff, eval_date)
+    ta = asof_row(assets_ff, eval_date)
+    ocf = asof_row(ocf_ff, eval_date)
+    ni = asof_row(ni_ff, eval_date)
+    if any(x is None for x in (mc, op, ta, ocf, ni)):
+        return []
+    act = active_mask(adj_close_raw, eval_date)
+
+    selected = []
+    for spdr, k in zip(top_spdrs, tiers):
+        ksec = spdr_map[spdr]
+        # 후보 + 시총
+        cand = []
+        for t in universe:                                 # 시총순 리스트(결정적)
+            if sector_map.get(t) != ksec or not act.get(t, False):
+                continue
+            m = mc.get(t)
+            if m is None or not (m > 0):
+                continue
+            cand.append((t, float(m)))
+        if not cand:
+            continue
+        # ① 시총 하위 small_pct (소형주)
+        dfm = pd.DataFrame(cand, columns=["ticker", "mcap"])
+        cut = dfm["mcap"].quantile(small_pct)
+        small = dfm[dfm["mcap"] <= cut]["ticker"].tolist()
+        # ② 흑자(OCF>0 & NI>0) ③ OPA=영업이익/자산 높은 순
+        qrows = []
+        for t in small:
+            o, n, oi, a = ocf.get(t), ni.get(t), op.get(t), ta.get(t)
+            if None in (o, n, oi, a) or not (o > 0 and n > 0 and a > 0):
+                continue
+            qrows.append((t, float(oi) / float(a)))
+        if not qrows:
+            continue
+        dq = pd.DataFrame(qrows, columns=["ticker", "opa"])
+        selected += dq.nlargest(min(k, len(dq)), "opa")["ticker"].tolist()
+    return selected
+
+
 # ── 위험회피 게이트 (t1 / t2) ────────────────────────────────────────────
 def _resample(series: pd.Series, cadence: str) -> pd.Series:
     rule = "ME" if cadence == "M" else "W-FRI"
     return series.resample(rule).last().dropna()
 
 
+def _win(months: int, cadence: str) -> int:
+    """개월 창 -> 캐던스별 창 길이. 월간=개월 그대로, 주간=round(개월×4.345)주."""
+    return months if cadence == "M" else int(round(months * C.WK_PER_MONTH))
+
+
 def build_gate(cadence: str, variant: str, eval_dates: list,
                kodex_daily: pd.Series, vix: pd.Series | None,
                credit: pd.Series | None,
                sp500: pd.Series | None = None,
-               t2_index: pd.Series | None = None) -> tuple[dict, dict]:
+               t2_index: pd.Series | None = None,
+               params: dict | None = None) -> tuple[dict, dict]:
     """eval_date -> 투자비중(1.0/0.0) 딕셔너리와 신호상세 딕셔너리 반환.
 
     variant: s1(항상 1.0) / s2(t1: 2개↑ 위험 -> 0.0) / s3(t2: MA 위 -> 1.0)
@@ -82,18 +196,23 @@ def build_gate(cadence: str, variant: str, eval_dates: list,
 
     t2_index: t2(s3) 추세추종 기준 지수. 기본 KODEX200(kodex_daily).
               미국 종목선정(us_sec/sp500)은 S&P500을 전달(2026-07-08 사용자 확정).
+    params:   폴드별 최적화용 오버라이드(없으면 config 기본값). 키:
+              t2_ma_m, t1_trend_ma_m(개월), t1_vix_th, t1_credit_z_th, t1_min_on.
     """
+    p = params or {}
+    t2_ma_m = p.get("t2_ma_m", C.T2_MA_M)
+    t1_trend_ma_m = p.get("t1_trend_ma_m", C.T1_TREND_MA_M)
+    t1_vix_th = p.get("t1_vix_th", C.T1_VIX_TH)
+    t1_credit_z_th = p.get("t1_credit_z_th", C.T1_CREDIT_Z_TH)
+    t1_min_on = p.get("t1_min_on", C.T1_MIN_ON)
+
     if variant == "s1":
         return {d: 1.0 for d in eval_dates}, {d: {} for d in eval_dates}
 
     t2_src = t2_index if t2_index is not None else kodex_daily
     k = _resample(t2_src, cadence)
-    if cadence == "M":
-        ma_t2 = k.rolling(C.T2_MA_M).mean()            # t2 10M (s3)
-        trend_ma_win = C.T1_TREND_MA_M                 # t1① 9M
-    else:
-        ma_t2 = k.rolling(C.T2_MA_W).mean()            # 43주 (s3)
-        trend_ma_win = C.T1_TREND_MA_W                 # 39주
+    ma_t2 = k.rolling(_win(t2_ma_m, cadence)).mean()               # t2 (s3)
+    trend_ma_win = _win(t1_trend_ma_m, cadence)                    # t1①
 
     if variant == "s3":
         gate, detail = {}, {}
@@ -123,11 +242,11 @@ def build_gate(cadence: str, variant: str, eval_dates: list,
         mt = asof_val(ma_trend, d)
         sig_trend = (pc is not None and mt is not None and pc < mt)          # ① S&P500<MA
         vv = asof_val(vix_r, d) if vix_r is not None else None
-        sig_vix = (vv is not None and vv > C.T1_VIX_TH)                       # ② VIX>18.6
+        sig_vix = (vv is not None and vv > t1_vix_th)                        # ② VIX>임계
         zz = asof_val(cr_z, d) if cr_z is not None else None
-        sig_credit = (zz is not None and zz > C.T1_CREDIT_Z_TH)              # ③ 신용 z>1.78
+        sig_credit = (zz is not None and zz > t1_credit_z_th)               # ③ 신용 z>임계
         n_on = int(sig_trend) + int(sig_vix) + int(sig_credit)
-        risk_off = n_on >= C.T1_MIN_ON
+        risk_off = n_on >= t1_min_on
         gate[d] = 0.0 if risk_off else 1.0
         detail[d] = {"trend": sig_trend, "vix": sig_vix, "credit": sig_credit,
                      "n_on": n_on, "risk_off": risk_off,

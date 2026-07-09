@@ -32,19 +32,11 @@ def _open_asof(open_ff: pd.DataFrame, date):
     return S.asof_row(open_ff, date)
 
 
-def _mom_step(panels: dict, d_eval, d_exec, d_next, invested, cash_period):
-    """모멘텀20 선정: 시초가→시초가 동일가중. (w_new, gross, n_hold) 반환."""
-    close_ff = panels["close_ff"]
-    adj_close = panels["adj_close"]
-    open_ff = panels["open_ff"]
-    mcap_hist = panels["mcap_hist"]
+def _equal_weight_oo(selected, open_ff, close_ff, d_exec, d_next, cash_period):
+    """선정 종목 동일가중, 시초가→시초가 보유수익. (w_new, gross, n_hold) 반환.
 
-    if invested >= 1.0:
-        selected = S.select_top(close_ff, adj_close, d_eval,
-                                 D.top_mcap_at(mcap_hist, d_eval, C.UNIVERSE_SIZE))
-    else:
-        selected = []
-
+    진입 시초가 확보 가능한 종목만 편입, 청산 시초가 결측은 종가로 근사(상폐 등).
+    """
     o_entry = _open_asof(open_ff, d_exec)
     o_exit = _open_asof(open_ff, d_next)
     valid = []
@@ -63,13 +55,48 @@ def _mom_step(panels: dict, d_eval, d_exec, d_next, invested, cash_period):
         p0 = float(o_entry.get(t))
         p1 = o_exit.get(t) if o_exit is not None else None
         if p1 is None or not np.isfinite(p1) or p1 <= 0:
-            c = S.asof_row(close_ff, d_next)          # 청산 시초가 결측 -> 종가 근사(상폐 등)
+            c = S.asof_row(close_ff, d_next)
             p1 = c.get(t) if c is not None else None
         if p1 is None or not np.isfinite(p1) or p1 <= 0:
             continue
         rets.append(p1 / p0 - 1.0)
     gross = float(np.mean(rets)) if rets else cash_period
     return w_new, gross, len(valid)
+
+
+def _mom_step(panels: dict, d_eval, d_exec, d_next, invested, cash_period):
+    """모멘텀20 선정: PIT 시총300 ∩ 12-1 모멘텀 상위20, 시초가→시초가 동일가중."""
+    if invested >= 1.0:
+        selected = S.select_top(panels["close_ff"], panels["adj_close"], d_eval,
+                                 D.top_mcap_at(panels["mcap_hist"], d_eval, C.UNIVERSE_SIZE))
+    else:
+        selected = []
+    return _equal_weight_oo(selected, panels["open_ff"], panels["close_ff"], d_exec, d_next, cash_period)
+
+
+def _krsec_lsv_step(panels: dict, d_eval, d_exec, d_next, invested, cash_period):
+    """한국 섹터 Fama-LSV: US섹터 모멘텀 상위3 -> 섹터내 저평가 7/5/3, 시초가→시초가 동일가중."""
+    if invested >= 1.0:
+        universe = D.top_mcap_at(panels["mcap_hist"], d_eval, C.UNIVERSE_SIZE)
+        selected = S.select_krsec_lsv(d_eval, panels["sector_etf_ff"], universe,
+                                      panels["sector_map"], panels["per_ff"], panels["pbr_ff"],
+                                      panels["adj_close"])
+    else:
+        selected = []
+    return _equal_weight_oo(selected, panels["open_ff"], panels["close_ff"], d_exec, d_next, cash_period)
+
+
+def _krsec_kang_step(panels: dict, d_eval, d_exec, d_next, invested, cash_period):
+    """한국 섹터 Kang Super Quality: US섹터 모멘텀 상위3 -> 소형·흑자·고수익성(OPA) 7/5/3."""
+    if invested >= 1.0:
+        universe = D.top_mcap_at(panels["mcap_hist"], d_eval, C.UNIVERSE_SIZE)
+        selected = S.select_krsec_kang(d_eval, panels["sector_etf_ff"], universe,
+                                       panels["sector_map"], panels["mcap_hist"],
+                                       panels["opinc_ff"], panels["assets_ff"],
+                                       panels["ocf_ff"], panels["ni_ff"], panels["adj_close"])
+    else:
+        selected = []
+    return _equal_weight_oo(selected, panels["open_ff"], panels["close_ff"], d_exec, d_next, cash_period)
 
 
 def _kd200_step(kodex_px: pd.Series, d_exec, d_next, invested, cash_period):
@@ -95,23 +122,28 @@ def _sp500_step(sp500_px: pd.Series, d_exec, d_next, invested, cash_period):
     return {"__CASH__": 1.0}, cash_period, 0
 
 
-def _us_sec_step(panels: dict, d_eval, d_exec, d_next, invested, cash_period):
-    """미국 섹터ETF 모멘텀 상위3 동일가중: 종가→종가, 즉시 진입(지연없음).
+def _us_sec_step(panels: dict, d_eval, d_exec, d_next, invested, cash_period, params=None):
+    """미국 섹터ETF 모멘텀 상위N 동일가중: 종가→종가, 즉시 진입(지연없음).
 
     시가 시계열이 없어 종가만 사용. d_exec==d_eval(평가에 쓴 종가로 바로 진입,
     2026-07-08 사용자 확정). PIT: 상장 전(NaN) 티커는 momentum()/active_mask()가 자동 제외.
+    params: 최적화 오버라이드(top_n, mom_lookback_m, mom_skip_m). 없으면 config 기본.
     """
     etf_ff = panels["sector_etf_ff"]
     etf_raw = panels["sector_etf"]
+    p = params or {}
+    top_n = p.get("top_n", C.TOP_N_US_SEC)
+    lookback_m = p.get("mom_lookback_m")
+    skip_m = p.get("mom_skip_m")
 
     if invested >= 1.0:
-        mom = S.momentum(etf_ff, d_eval)
+        mom = S.momentum(etf_ff, d_eval, lookback_m, skip_m)
         if mom.empty:
             selected = []
         else:
             elig = S.active_mask(etf_raw, d_eval)
             cand = mom[[t for t in mom.index if elig.get(t, False)]]
-            selected = (cand.nlargest(min(C.TOP_N_US_SEC, len(cand))).index.tolist()
+            selected = (cand.nlargest(min(top_n, len(cand))).index.tolist()
                         if not cand.empty else [])
     else:
         selected = []
@@ -140,11 +172,14 @@ def _us_sec_step(panels: dict, d_eval, d_exec, d_next, invested, cash_period):
     return w_new, gross, len(valid)
 
 
-def run_strategy(strat: dict, panels: dict) -> pd.DataFrame:
+def run_strategy(strat: dict, panels: dict, params: dict | None = None,
+                 eval_window: tuple | None = None) -> pd.DataFrame:
     """단일 전략 실행 -> 기간별 레코드 DataFrame.
 
     반환 컬럼: entry(실행일), exit(다음실행일=수익실현일), invested, n_hold,
               turnover, cost, gross, net, buys, sells
+    params:      폴드별 최적화 오버라이드(모멘텀/보유수/t1/t2). None이면 config 기본.
+    eval_window: (start, end) 지정 시 해당 구간의 eval만 사용(IS 스코어링 가속용).
     """
     cadence, variant = strat["cadence"], strat["variant"]
     selection = strat.get("selection", "mom20")
@@ -167,10 +202,17 @@ def run_strategy(strat: dict, panels: dict) -> pd.DataFrame:
 
     eval_dates = build_eval_dates(cadence, tidx)
     eval_dates = [pd.Timestamp(d) for d in eval_dates]
+    if eval_window is not None:
+        # IS 스코어링: 구간 내 eval + 마지막 구간수익 실현용으로 창 종료 직후 1개 eval 포함
+        ws, we = pd.Timestamp(eval_window[0]), pd.Timestamp(eval_window[1])
+        in_win = [d for d in eval_dates if ws <= d <= we]
+        after = [d for d in eval_dates if d > we]
+        eval_dates = in_win + after[:1]
 
     # t2(s3) 추세신호 기준 지수: 미국 종목선정은 S&P500, 그 외 KODEX200(기본)
     t2_index = sp500 if selection in ("us_sec", "sp500") else None
-    gate, _detail = S.build_gate(cadence, variant, eval_dates, kodex_daily, vix, credit, sp500, t2_index)
+    gate, _detail = S.build_gate(cadence, variant, eval_dates, kodex_daily, vix, credit,
+                                 sp500, t2_index, params)
     cash_period = C.CASH_MONTHLY if cadence == "M" else C.CASH_WEEKLY
 
     # 각 eval -> exec: 국내(mom20/kd200)는 익영업일, 미국(us_sec/sp500)은 지연없이 eval 당일
@@ -196,7 +238,11 @@ def run_strategy(strat: dict, panels: dict) -> pd.DataFrame:
         elif selection == "sp500":
             w_new, gross, n_hold = _sp500_step(sp500, d_exec, d_next, invested, cash_period)
         elif selection == "us_sec":
-            w_new, gross, n_hold = _us_sec_step(panels, d_eval, d_exec, d_next, invested, cash_period)
+            w_new, gross, n_hold = _us_sec_step(panels, d_eval, d_exec, d_next, invested, cash_period, params)
+        elif selection == "krsec_lsv":
+            w_new, gross, n_hold = _krsec_lsv_step(panels, d_eval, d_exec, d_next, invested, cash_period)
+        elif selection == "krsec_kang":
+            w_new, gross, n_hold = _krsec_kang_step(panels, d_eval, d_exec, d_next, invested, cash_period)
         else:
             w_new, gross, n_hold = _mom_step(panels, d_eval, d_exec, d_next, invested, cash_period)
 

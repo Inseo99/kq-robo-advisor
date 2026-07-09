@@ -16,10 +16,17 @@ import os
 import sys
 import io
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-
 import numpy as np
 import pandas as pd
+
+
+def _utf8_stdout():
+    """윈도우 cp949 콘솔에서 한글/기호 출력 깨짐 방지. 실행 시점에만 1회 적용(import 시 X)."""
+    if getattr(sys.stdout, "encoding", "").lower() not in ("utf-8", "utf8"):
+        try:
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+        except (ValueError, AttributeError):
+            pass
 
 import config as C
 import data as D
@@ -49,6 +56,13 @@ def load_panels() -> dict:
         "credit": D.load_credit_us(),
         "sector_etf": sector_etf,
         "sector_etf_ff": sector_etf.ffill() if sector_etf is not None else None,
+        "sector_map": D.load_sector_map(),
+        "per_ff": D.load_metric_panel("PER").ffill(),
+        "pbr_ff": D.load_metric_panel("PBR").ffill(),
+        "opinc_ff": D.load_fin_item("영업이익(천원)", "opinc"),
+        "assets_ff": D.load_fin_item("자산총계(천원)", "assets"),
+        "ocf_ff": D.load_fin_item("영업활동으로인한현금흐름(천원)", "ocf"),
+        "ni_ff": D.load_fin_item("당기순이익(천원)", "ni"),
     }
     print(f"[load] 완료. close {adj_close.shape}, "
           f"S&P500={'O' if panels['sp500'] is not None else 'X'}, "
@@ -95,6 +109,7 @@ def collect_benchmark(bench_daily: pd.Series, code: str) -> list[dict]:
 
 
 def main():
+    _utf8_stdout()
     os.makedirs(C.RESULTS, exist_ok=True)
     panels = load_panels()
     t1_ready = panels["vix"] is not None and panels["credit"] is not None
@@ -182,7 +197,7 @@ def _metric_table(mdf, fold_name, codes, cadence=None):
 
 
 def write_report(mdf, ran, skipped, t1_ready):
-    kr_sel = ("mom20", "kd200")
+    kr_sel = ("mom20", "kd200", "krsec_lsv", "krsec_kang")
     us_sel = ("us_sec", "sp500")
     kr_monthly = [s["code"] for s in C.STRATEGIES if s["cadence"] == "M" and s["selection"] in kr_sel and s["code"] in ran]
     kr_weekly = [s["code"] for s in C.STRATEGIES if s["cadence"] == "W" and s["selection"] in kr_sel and s["code"] in ran]
@@ -231,6 +246,12 @@ def write_report(mdf, ran, skipped, t1_ready):
     out.append("| s1w-kd200 | 주간 | **KODEX200 단일보유** | 없음 |")
     out.append("| s2w-kd200 | 주간 | KODEX200 | t1 (s2w과 동일) |")
     out.append("| s3w-kd200 | 주간 | KODEX200 | t2 (s3w과 동일) |")
+    out.append("| s1m_lsv | 월간 | **US섹터 SPDR 모멘텀 상위3섹터 → 한국 섹터 매핑 → 섹터내 Fama-LSV(PER·PBR 저평가) 7/5/3** | 없음 |")
+    out.append("| s1m_kang | 월간 | **US섹터 모멘텀 상위3섹터 → 섹터내 Kang우량주(①시총하위50% ②영업현금흐름>0&순익>0 ③영업이익/자산 높은순) 7/5/3** | 없음 |")
+    out.append("\n> **한국 섹터 Fama-LSV(s1m_lsv, 2026-07-08)**: 매 월말 US 섹터 SPDR(XLK 등)의 12-1 모멘텀 상위 3섹터를 "
+               "한국 FnGuide 섹터로 매핑하고, 각 섹터 내에서 PER·PBR이 모두 양수인 종목을 (PER랭크+PBR랭크) 저평가 순으로 "
+               "1위섹터 7개/2위 5개/3위 3개(총 15) 동일가중 보유. 섹터분류는 stocks.parquet 스냅샷(비-PIT, 섹터 거의 불변), "
+               "밸류(PER/PBR)는 일별 PIT. 벤치마크는 KODEX200(한국 종목 보유).\n")
     out.append("\n> **종목선정 변형(국내)**: `*-kd200`은 모멘텀20 포트폴리오 대신 **KODEX200(069500) 1종목**을 보유합니다. "
                "리밸런싱 주기·거래비용(왕복 0.5%)·현금(연2%)·위험회피(t1/t2)는 기존과 동일해 직접 비교 가능합니다. "
                "KODEX200은 시초가 시계열이 없어 보유수익을 **종가→종가**(실행일 다음 거래일 종가 기준, 실행지연 동일)로 계산합니다. "
