@@ -1,4 +1,4 @@
-﻿"""HTTP route dispatch helpers for the legacy server."""
+"""HTTP route dispatch helpers for the legacy server."""
 
 from __future__ import annotations
 
@@ -101,6 +101,7 @@ def handle_legacy_get(
     health: Callable[[], object],
     portfolio_orders: Callable[..., object] | None = None,
     return_heatmap: Callable[..., object] | None = None,
+    reco_track: Callable[..., object] | None = None,
 ) -> str:
     """Apply the legacy fallback GET route table through server callbacks."""
 
@@ -158,6 +159,13 @@ def handle_legacy_get(
             limit = 36
         send_json(return_heatmap(limit), 200)
         return "return_heatmap"
+    if path == "/api/reco_track" and reco_track is not None:
+        try:
+            months = int(float(query.get("months", [36])[0]))
+        except (TypeError, ValueError):
+            months = 36
+        send_json(reco_track(months), 200)
+        return "reco_track"
     if path == "/api/health":
         send_json(health(), 200)
         return "health"

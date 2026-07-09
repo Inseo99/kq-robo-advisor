@@ -1,4 +1,4 @@
-﻿"""GET route response builders for the local API."""
+"""GET route response builders for the local API."""
 
 from __future__ import annotations
 
@@ -91,5 +91,10 @@ def build_get_response(
         return make_response(
             "json",
             services["return_heatmap"](_query_int(query, "limit", 36)),
+        )
+    if path == "/api/reco_track" and "reco_track" in services:
+        return make_response(
+            "json",
+            services["reco_track"](_query_int(query, "months", 36)),
         )
     return make_response("not_found", {"error": "not found"}, code=404)

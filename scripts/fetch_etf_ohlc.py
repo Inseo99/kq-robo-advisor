@@ -36,11 +36,11 @@ def main() -> None:
         print(f"[ok] {t}: {len(out)} rows ({out['date'].iloc[0].date()} ~ {out['date'].iloc[-1].date()})")
     panel = pd.concat(frames, ignore_index=True)
     # 무결성: low ≤ open,close ≤ high
-    # 정제 1: 무거래일 시가 0 → 종가 대체 (이번 데이터 0건, 미래 방어용)
+    # 정제 1: 무거래일 시가 0 → 종가 대체 (2026-07 기준 0건, 미래 방어용)
     zero_open = panel["open"] <= 0
     panel.loc[zero_open, "open"] = panel.loc[zero_open, "close"]
-    # 정제 2: 수정계수 불일치로 인한 미세 위반(229200 상장 초기 155행 확인됨)
-    #         → 고저를 시/종가가 포함되도록 클립 (포락선 정의상 보수적 확장)
+    # 정제 2: 수정계수 불일치 미세 위반(229200 상장 초기 155행 실측) →
+    #         고저를 시/종가가 포함되도록 클립. 포락선은 '한계' 정의라 보수적 확장.
     lo_fix = panel["low"] > panel[["open", "close"]].min(axis=1)
     hi_fix = panel["high"] < panel[["open", "close"]].max(axis=1)
     panel.loc[lo_fix, "low"] = panel.loc[lo_fix, ["low", "open", "close"]].min(axis=1)
@@ -48,7 +48,7 @@ def main() -> None:
     n_fixed = int(zero_open.sum() + (lo_fix | hi_fix).sum())
     if n_fixed / len(panel) > 0.02:
         raise SystemExit(f"[stop] 정제 비율 {n_fixed/len(panel):.1%} > 2% — 소스 자체 점검 필요")
-    print(f"정제: 시가0 대체 {int(zero_open.sum())}행 · 고저 클립 {int((lo_fix|hi_fix).sum())}행 / 전체 {len(panel)}행")
+    print(f"정제: 시가0 대체 {int(zero_open.sum())}행 · 고저 클립 {int((lo_fix | hi_fix).sum())}행 / 전체 {len(panel)}행")
     bad = panel[(panel["low"] > panel[["open", "close"]].min(axis=1)) |
                 (panel["high"] < panel[["open", "close"]].max(axis=1))]
     if len(bad):

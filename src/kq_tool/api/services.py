@@ -1,4 +1,4 @@
-﻿"""Service registry helpers for API route dispatch."""
+"""Service registry helpers for API route dispatch."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ REQUIRED_SERVICE_KEYS = (
 OPTIONAL_SERVICE_KEYS = (
     "portfolio_orders",
     "return_heatmap",
+    "reco_track",
 )
 
 
@@ -57,6 +58,7 @@ def build_server_api_services(
     market_report: Callable[[], object],
     portfolio_orders: Callable[..., object] | None = None,
     return_heatmap: Callable[..., object] | None = None,
+    reco_track: Callable[..., object] | None = None,
 ) -> dict[str, Callable[..., object]]:
     """Build the service registry used by the local server handler."""
 
@@ -72,4 +74,5 @@ def build_server_api_services(
         market_report=market_report,
         portfolio_orders=portfolio_orders,
         return_heatmap=return_heatmap,
+        reco_track=reco_track,
     )

@@ -1,4 +1,4 @@
-﻿
+
 
 #!/usr/bin/env python3
 """
@@ -320,6 +320,12 @@ try:
 except Exception as _profile_api_e:
     print(f'  [module] risk profile API import 실패 - profile 메타데이터 생략: {_profile_api_e}')
     _kq_resolve_profile_request = None
+
+try:
+    from kq_tool.api.reco_track import build_reco_track as _kq_build_reco_track
+except Exception as _reco_track_e:
+    print(f'  [module] reco track import 실패 - 추천 모의 트랙 비활성화: {_reco_track_e}')
+    _kq_build_reco_track = None
 
 try:
     from kq_tool.backtest.comparison import (
@@ -819,7 +825,8 @@ def _dl(ticker, period='1y'):
                 return df, False
         except Exception as e:
             pass
-
+
+
     # 2) 단일 게이트웨이 원칙: 실시간 yfinance fallback 금지
     # 3) 샘플 데이터
     if ticker not in _warned_tickers:
@@ -2718,6 +2725,16 @@ def return_heatmap(limit_months=36):
     return build_return_heatmap(limit_months=limit)
 
 
+def build_reco_track_response(months=36):
+    if _kq_build_reco_track is None:
+        return dict(error='추천 모의 트랙 helper를 사용할 수 없습니다.')
+    try:
+        limit = int(months)
+    except (TypeError, ValueError):
+        limit = 36
+    return _kq_build_reco_track(max(1, min(240, limit)))
+
+
 def _load_recommendation_regime_alpha_summary():
     if not (_KQ_PORTFOLIO_HELPERS_READY and _kq_load_regime_alpha_summary is not None):
         return []
@@ -3046,6 +3063,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             market_report=build_market_report_response,
             portfolio_orders=portfolio_orders,
             return_heatmap=return_heatmap,
+            reco_track=build_reco_track_response,
         )
 
     def _read_json_body(self, max_bytes=2000000):
@@ -3092,6 +3110,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 health=build_health_response,
                 portfolio_orders=portfolio_orders,
                 return_heatmap=return_heatmap,
+                reco_track=build_reco_track_response,
             )
             return
 
