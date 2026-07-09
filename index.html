@@ -496,6 +496,16 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
         <div class="loading-msg">전략/자산 월별 수익률을 색상표로 표시합니다</div>
       </div>
     </div>
+    <div class="section" id="reco-track-section">
+  <div class="sec-head">추천 규칙 모의 트랙 <span class="tag">국면→ERC v1 소급 적용 · 모의</span>
+    <button class="btn btn-sm" onclick="loadRecoTrack()">▶ 계산</button>
+  </div>
+  <div id="rt-summary" style="font-size:11px;color:var(--mu);margin-bottom:6px"></div>
+  <div id="rt-chart" style="margin:4px 0 10px 0"></div>
+  <div id="rt-content"><div class="loading-msg">▶ 계산: 일별 NAV 곡선 + 월별·종목별 기여도 분해</div></div>
+  <div id="rt-caveats" style="font-size:10px;color:var(--yl);margin-top:8px;
+       padding:6px 10px;background:#21262d;border-radius:4px;display:none"></div>
+</div>
   </div>
 </div><!-- analysis-side -->
 </div><!-- main -->
@@ -2256,9 +2266,111 @@ function renderRollingReview(set){
     });
     html += '</table></div>';
   });
-  html += '<div style="font-size:10px;color:var(--mu);margin-top:6px">rolling 표는 현재 선택된 히트맵 데이터의 마지막 관측월 기준으로 계산됩니다. 최종 투자 판단은 사람이 검토하는 HILP 단계입니다.</div></div>';
+  html += '<div style="font-size:10px;color:var(--mu);margin-top:6px">rolling 표는 현재 선택된 히트맵 데이터의 마지막 관측월 기준으로 계산됩니다. 최종 투자 판단은 사람이 검토하는 HITL 단계입니다.</div></div>';
   return html;
 }
+
+
+let recoTrack = null;
+
+async function loadRecoTrack(){
+  overlay('모의 트랙 계산 중...');
+  try{
+    const r = await fetch('/api/reco_track?months=36');
+    if(!r.ok) throw new Error('서버 오류');
+    recoTrack = await r.json();
+    if(recoTrack.error) throw new Error(recoTrack.error);
+    overlay();
+    renderRecoTrack();
+  }catch(e){ overlay(); alert('오류: '+e.message); }
+}
+
+function _rtPct(v){ return (v>=0?'+':'') + (v*100).toFixed(2) + '%'; }
+function _rtColor(v){ return v>0 ? 'var(--gr)' : (v<0 ? 'var(--rd)' : 'var(--mu)'); }
+
+/* 일별 NAV → SVG 라인차트 (교수 1-a: 월간 구성으로 역산한 일별 평가금액) */
+function _rtChart(daily, intraday){
+  if(!daily || daily.length < 2) return '';
+  const W=940, H=180, PAD=34;
+  const navs = daily.map(p => p.nav);
+  const mn = Math.min(...navs), mx = Math.max(...navs);
+  const x = i => PAD + (W-2*PAD) * i / (daily.length-1);
+  const y = v => H-PAD - (H-2*PAD) * (v-mn) / (mx-mn || 1);
+  const pts = daily.map((p,i) => `${x(i).toFixed(1)},${y(p.nav).toFixed(1)}`).join(' ');
+  let band = '';
+  if(intraday && intraday.bands){
+    const bm = Object.fromEntries(intraday.bands.map(b => [b.date, b]));
+    const hiPts = [], loPts = [];
+    daily.forEach((p,i) => { const b = bm[p.date]; if(b){
+      hiPts.push(`${x(i).toFixed(1)},${y(b.hi).toFixed(1)}`);
+      loPts.push(`${x(i).toFixed(1)},${y(b.lo).toFixed(1)}`); }});
+    if(hiPts.length) band = `<polygon points="${hiPts.join(' ')} ${loPts.reverse().join(' ')}"
+      fill="#58a6ff" opacity="0.12" stroke="none"/>`;
+  }
+  const y1 = y(1.0);   /* 원금선 */
+  const ticks = [0, Math.floor(daily.length/3), Math.floor(2*daily.length/3), daily.length-1];
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;background:#161b22;border-radius:6px">
+    <line x1="${PAD}" y1="${y1}" x2="${W-PAD}" y2="${y1}" stroke="#8b96ad" stroke-width="0.6" stroke-dasharray="4 4"/>
+    <text x="${W-PAD}" y="${y1-4}" text-anchor="end" font-size="9" fill="#8b96ad">원금(1.0)</text>
+    ${band}
+    <polyline points="${pts}" fill="none" stroke="#58a6ff" stroke-width="1.4"/>
+    ${ticks.map(i => `<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#8b96ad">${daily[i].date}</text>`).join('')}
+    <text x="${PAD}" y="14" font-size="9.5" fill="#8b96ad">일별 NAV (세전) · ${daily.length}거래일 · 음영 = 일중 고저 포락선(한계)</text>
+    <text x="${W-PAD}" y="14" text-anchor="end" font-size="10" fill="${mx>=1?'#3fb950':'#f85149'}">고점 ${((mx-1)*100).toFixed(1)}% / 저점 ${((mn-1)*100).toFixed(1)}%</text>
+  </svg>`;
+}
+
+function toggleRtDetail(i){
+  const tr = el('rt-detail-'+i);
+  if(tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
+}
+
+function renderRecoTrack(){
+  const d = recoTrack;
+  const assets = d.assets;
+  const ANAME = {stocks:'주식', bonds:'채권', gold:'금', cash:'현금'};
+
+  el('rt-summary').innerHTML =
+    `${d.n_months}개월 · 누적(세전) <b style="color:${_rtColor(d.cum_return)}">${_rtPct(d.cum_return)}</b>` +
+    ` · <b>누적(세후 근사) <span style="color:${_rtColor(d.cum_return_at)}">${_rtPct(d.cum_return_at)}</span></b><br>` +
+    `종목 누적기여: ` + Object.entries(d.ticker_totals).map(([t,v]) =>
+      `${d.ticker_names[t]||t} <span style="color:${_rtColor(v)}">${_rtPct(v)}</span>`).join(' · ');
+
+  el('rt-chart').innerHTML = _rtChart(d.daily, d.intraday);
+  if(d.intraday){
+    el('rt-summary').innerHTML += `<br>일별 분해: 오버나이트 누적 <span style="color:${_rtColor(d.intraday.overnight_cum)}">${_rtPct(d.intraday.overnight_cum)}</span>` +
+      ` × 장중 누적 <span style="color:${_rtColor(d.intraday.intraday_cum)}">${_rtPct(d.intraday.intraday_cum)}</span>` +
+      ` · MDD 종가 ${_rtPct(d.intraday.mdd_close)} / <b>일중 포락선 하한 ${_rtPct(d.intraday.mdd_intraday_bound)}</b>`;
+  }
+
+  let html = `<table class="screen-tbl"><tr><th></th><th>월</th><th>국면</th>` +
+    `<th>수익률<br><span style="font-weight:400;font-size:9.5px;color:var(--mu)">세전</span></th>` +
+    `<th>세후<br><span style="font-weight:400;font-size:9.5px;color:var(--mu)">근사</span></th>` +
+    assets.map(a => `<th>${ANAME[a]} 기여</th>`).join('') + `<th>누적</th></tr>`;
+  const rev = [...d.rows].reverse();
+  rev.forEach((row, i) => {
+    html += `<tr onclick="toggleRtDetail(${i})" style="cursor:pointer" title="클릭: 종목별 기여 분해">` +
+      `<td style="color:var(--mu)">▸</td><td>${row.month}</td><td style="font-size:10.5px">${row.regime}</td>` +
+      `<td style="color:${_rtColor(row.port_return)};font-weight:600">${_rtPct(row.port_return)}</td>` +
+      `<td style="color:${_rtColor(row.port_return_at)}">${_rtPct(row.port_return_at)}` +
+      (row.tax_paid > 0 ? `<br><span style="font-size:9px;color:var(--mu)">세 ${(row.tax_paid*100).toFixed(2)}%p</span>` : '') + `</td>` +
+      assets.map(a => `<td style="color:${_rtColor(row.contributions[a])}">${_rtPct(row.contributions[a])}<br>` +
+        `<span style="font-size:9px;color:var(--mu)">w ${(row.weights[a]*100).toFixed(0)}%</span></td>`).join('') +
+      `<td style="color:${_rtColor(row.cum_return)}">${_rtPct(row.cum_return)}</td></tr>`;
+    /* 종목별 기여 분해 행 (교수 1-c 종목 레벨) */
+    html += `<tr id="rt-detail-${i}" style="display:none"><td></td>` +
+      `<td colspan="${4 + assets.length + 1}" style="font-size:10.5px;color:var(--mu);padding:4px 8px">` +
+      Object.entries(row.ticker_contributions).map(([t,v]) =>
+        `${d.ticker_names[t]||t}: <span style="color:${_rtColor(v)}">${_rtPct(v)}</span>`).join(' &nbsp;·&nbsp; ') +
+      `</td></tr>`;
+  });
+  el('rt-content').innerHTML = html + '</table>';
+
+  const cv = el('rt-caveats');
+  cv.style.display = 'block';
+  cv.textContent = '⚠ ' + d.caveats + ' ⚠ ' + d.tax_caveats;
+}
+
 
 function saveHeatmapCsv(){
   const set = heatmapData?.sets?.[heatmapView];
