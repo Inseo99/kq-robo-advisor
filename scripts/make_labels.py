@@ -157,8 +157,13 @@ def print_diagnostics(labels: pd.Series, cfg: LabelConfig) -> None:
     )
 
 
-def export_labels(labels: pd.Series) -> None:
+def export_labels(labels: pd.Series, force: bool = False) -> None:
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+    if OUT_CSV.exists() and not force:
+        print(f"\n[guard] {OUT_CSV} 는 채택 라벨입니다 (현행: N7 워크포워드 — "
+              f"재현은 scripts/regime_next_n7.py).")
+        print("[guard] 이 스크립트의 구 규칙 라벨로 덮어쓰려면 --force 를 지정하세요. 저장 생략.")
+        return
     labels.dropna().rename("regime").rename_axis("date").to_csv(OUT_CSV, encoding="utf-8-sig")
     print(f"\nlabels saved: {OUT_CSV}")
     print(
@@ -174,6 +179,8 @@ def main() -> int:
     parser.add_argument("--warmup", type=int, default=24)
     parser.add_argument("--growth-mode", choices=["single", "composite"], default="single")
     parser.add_argument("--chart-only", action="store_true")
+    parser.add_argument("--force", action="store_true",
+                        help="채택 라벨(regime_labels.csv)을 이 스크립트 결과로 덮어쓰기 허용")
     args = parser.parse_args()
 
     cfg = LabelConfig(
@@ -199,7 +206,7 @@ def main() -> int:
         return 1
 
     if not args.chart_only:
-        export_labels(labels)
+        export_labels(labels, force=args.force)
     make_chart(labels)
     return 0
 

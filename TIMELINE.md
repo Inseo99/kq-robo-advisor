@@ -502,3 +502,11 @@ review-window tool. The next validation pass should separate:
 
 
 
+
+## 2026-07-10 — regime-next: N7 라벨 채택 (브랜치)
+
+- N7 = 물가축 창-독립(당시 물가안정목표 + 하방 0.5%p 완충) + 성장축 강도 조건부 상향.
+  창 민감도 68.3→91.7%, 앵커 6/6, 전환 33→19회, 2022-03 스태그 3창 동기화.
+- 사전 등록 5시도(N1 기각, N3′ 대체, N5·N6 대안 보존, N7 합격) — regime_next_실험로그.md.
+- 채택 라벨 교체·ERC 재산출(비중 변화 ≤0.3%p)·타임라인/전이행렬 재생성 완료.
+  상세: docs/REGIME_N7_ADOPTION.md. make_labels.py에 채택본 덮어쓰기 가드 추가.
