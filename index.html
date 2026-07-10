@@ -387,6 +387,12 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
         <div class="loading-msg">전략·옵션 선택 후 실행하세요<br><span style="font-size:10px">과거 3년 데이터로 검증 (30~60초 소요)</span></div>
       </div>
     </div>
+    <div class="section">
+      <div class="sec-head">섹터·팩터 독립 백테스트 <span class="tag">검증 엔진 · 추천 미반영</span></div>
+      <div id="sector-factor-content">
+        <div class="loading-msg">요약 불러오는 중...</div>
+      </div>
+    </div>
   </div>
 
   <!-- 매크로 -->
@@ -550,6 +556,7 @@ let chartViewEnd = null;
 let chartDragState = null;
 // 전략 백테스트 상태
 let stratBtData   = null;
+let sectorFactorData = null;   // 섹터·팩터 독립 백테스트 요약 (읽기 전용)
 let btStrategy    = 'quant_compare';
 let btTopN        = 5;
 let btRebal       = 'M';
@@ -627,6 +634,7 @@ function switchPanel(id, btn){
   if(id==='screen' && !screenData) {} // 수동 실행
   if(id==='bt' && !btData) {}
   if(id==='stratbt' && !stratBtData) {} // 수동 실행
+  if(id==='stratbt' && !sectorFactorData) loadSectorFactor(); // 요약 카드는 자동 로드
   if(id==='macro' && !macroLoaded) loadMacro();
   if(id==='recommend' && !recommendData) loadRecommendPortfolio();
   if(id==='heatmap' && !heatmapData) loadReturnHeatmap();
@@ -1477,6 +1485,45 @@ function selBtN(btn){
 function selBtR(btn){
   document.querySelectorAll('[data-br]').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active'); btRebal=btn.dataset.br;
+}
+
+// ─── 섹터·팩터 독립 백테스트 요약 카드 (읽기 전용, 추천 엔진 미반영) ──────
+async function loadSectorFactor(){
+  const box = el('sector-factor-content');
+  try{
+    const r = await fetch('/api/sector_factor');
+    if(!r.ok) throw new Error('서버 오류');
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || '데이터 없음');
+    sectorFactorData = d;
+    const rows = d.rows.map(row=>{
+      const hl = row.code===d.best_code;
+      const bench = row.is_benchmark;
+      const style = bench ? 'color:var(--mu);font-style:italic'
+                  : hl ? 'font-weight:700;background:#16213a' : '';
+      return `<tr style="${style}">
+        <td style="text-align:left">${row.code}</td>
+        <td style="text-align:left">${row.selection}</td>
+        <td style="text-align:left">${row.gate}</td>
+        <td>${row.cagr_pct==null?'-':row.cagr_pct.toFixed(2)}</td>
+        <td>${row.mdd_pct==null?'-':row.mdd_pct.toFixed(2)}</td>
+        <td>${row.sharpe==null?'-':row.sharpe.toFixed(2)}</td>
+        <td>${row.calmar==null?'-':row.calmar.toFixed(2)}</td>
+        <td>${row.cost_ann_pct==null?'-':row.cost_ann_pct.toFixed(2)}</td>
+      </tr>`;}).join('');
+    box.innerHTML = `
+      <div style="font-size:11px;color:var(--mu);margin-bottom:8px;line-height:1.5">${d.position}</div>
+      <div style="overflow-x:auto"><table class="heatmap-table" style="width:100%">
+        <thead><tr><th>전략</th><th>종목선정</th><th>위험회피 게이트</th>
+        <th>CAGR%</th><th>MDD%</th><th>Sharpe</th><th>Calmar</th><th>연환산비용%</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.5">게이트 정의: ${d.gates}</div>
+      <div style="font-size:11px;color:var(--tx);background:#16213a;border:1px solid var(--bd);border-radius:4px;padding:8px 10px;margin-top:8px;line-height:1.55">
+        <b>후속 검증 후보 (수치 미채택)</b><br>${d.candidate}</div>
+      <div style="font-size:10px;color:var(--mu);margin-top:6px;font-style:italic">원칙: ${d.principle}</div>`;
+  }catch(e){
+    box.innerHTML = `<div class="loading-msg">섹터·팩터 요약을 불러올 수 없습니다: ${e.message}</div>`;
+  }
 }
 
 async function loadStratBt(){

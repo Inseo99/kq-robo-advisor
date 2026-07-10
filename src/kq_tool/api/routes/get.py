@@ -92,6 +92,8 @@ def build_get_response(
             "json",
             services["return_heatmap"](_query_int(query, "limit", 36)),
         )
+    if path == "/api/sector_factor" and "sector_factor" in services:
+        return make_response("json", services["sector_factor"]())
     if path == "/api/reco_track" and "reco_track" in services:
         return make_response(
             "json",

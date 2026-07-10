@@ -20,6 +20,7 @@ OPTIONAL_SERVICE_KEYS = (
     "portfolio_orders",
     "return_heatmap",
     "reco_track",
+    "sector_factor",
 )
 
 
@@ -59,6 +60,7 @@ def build_server_api_services(
     portfolio_orders: Callable[..., object] | None = None,
     return_heatmap: Callable[..., object] | None = None,
     reco_track: Callable[..., object] | None = None,
+    sector_factor: Callable[[], object] | None = None,
 ) -> dict[str, Callable[..., object]]:
     """Build the service registry used by the local server handler."""
 
@@ -75,4 +77,5 @@ def build_server_api_services(
         portfolio_orders=portfolio_orders,
         return_heatmap=return_heatmap,
         reco_track=reco_track,
+        sector_factor=sector_factor,
     )

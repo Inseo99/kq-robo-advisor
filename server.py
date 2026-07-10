@@ -328,6 +328,14 @@ except Exception as _reco_track_e:
     _kq_build_reco_track = None
 
 try:
+    from kq_tool.backtest.sector_factor_summary import (
+        build_sector_factor_summary as _kq_build_sector_factor_summary,
+    )
+except Exception as _sector_factor_e:
+    print(f'  [module] sector factor summary import 실패 - 섹터·팩터 요약 카드 비활성화: {_sector_factor_e}')
+    _kq_build_sector_factor_summary = None
+
+try:
     from kq_tool.backtest.comparison import (
         build_quant_comparison_response as _kq_build_quant_comparison_response,
     )
@@ -3064,6 +3072,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             portfolio_orders=portfolio_orders,
             return_heatmap=return_heatmap,
             reco_track=build_reco_track_response,
+            sector_factor=(
+                (lambda: _kq_build_sector_factor_summary(BASE_DIR))
+                if _kq_build_sector_factor_summary is not None else None
+            ),
         )
 
     def _read_json_body(self, max_bytes=2000000):
