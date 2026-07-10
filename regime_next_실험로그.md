@@ -168,7 +168,7 @@ N5가 건드리지 않은 성장축 분기 해상도(QA §2의 기존 진단)다
 - 채택 라벨(data/regime/labels.csv, data/macro/regime_labels.csv)·태그: 무변경
 
 
-## J2 — 국면 생애(lifecycle) 특징 검정 (시도 1) → **기각 (개선 없음, 무기억 유지)**
+## J2 — 국면 생애(lifecycle) 특징 검정 (시도 1) → **예비 기각 (개선 없음 — 최종 환경 재현 후 확정)**
 
 교수 제안(사이클 위치)의 인과적 재해석: cycle_position은 사이클 종점을 알아야 하는
 look-ahead라 특징으로 부적합 → 확정 라벨 이력만 쓰는 생애 특징 6종(지속 개월, 직전
@@ -180,7 +180,26 @@ look-ahead라 특징으로 부적합 → 확정 라벨 이력만 쓰는 생애 �
 | nowcast | 1.2261 | 1.2555 | +0.0294 | 악화 |
 | forecast | 1.3773 | 1.3860 | +0.0087 | 악화 |
 
-사전 고정 기준(악화 +0.005 초과 시 기각)에 따라 기각. 해석: 이 표본(평가 115개월,
+사전 고정 기준(악화 +0.005 초과 시 기각)에 따라 예비 기각. 해석: 이 표본(평가 115개월,
 4분류)에서 국면 전이의 지속 의존성 증거는 검출되지 않음 — 무기억 마코프(P³) 유지가
-데이터의 지지를 받음. 주의: 세션 분류기는 sklearn HistGB 폴백 — 로컬 TabPFN/LGBM
-재실행으로 확정 권장 (scripts/regime_next_j2_lifecycle.py 한 줄 실행).
+데이터의 지지를 받음.
+
+**지위: 예비 결과(preliminary).** 본 실행의 분류기는 sklearn HistGB 폴백이며, 논문의
+최종 결론으로 쓰려면 최종 모델 환경(TabPFN/LightGBM)에서 동일 결론이 재현되어야 한다
+(scripts/regime_next_j2_lifecycle.py 로컬 1회 실행 — 스크립트가 사용 분류기를 출력).
+재현 시 완전 기각 확정, 반전 시 Results로 승격.
+
+**특징별 분해 (leave-one-in, 기준 대비 ΔLogLoss — 기술 통계):**
+
+| Feature | nowcast | forecast |
+|---|---|---|
+| regime_duration | +0.0051 | +0.0071 |
+| previous_regime_duration | +0.0024 | +0.0064 |
+| months_since_last_risk | +0.0097 | +0.0063 |
+| **risk_frequency_24m** | **+0.0186** | **+0.0374** |
+| regime_change_count_24m | +0.0095 | −0.0066 |
+| duration_percentile | −0.0029 | +0.0050 |
+
+주된 악화 원인은 risk_frequency_24m(빈도 특징) 하나이며, 지속 자체(regime_duration·
+duration_percentile)는 과제 간 부호가 엇갈리는 잡음 수준 — "지속 의존성 신호 부재"라는
+해석과 정합. (data/analysis_outputs/j2_feature_ablation.csv)

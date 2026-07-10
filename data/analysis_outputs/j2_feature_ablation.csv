@@ -1,0 +1,7 @@
+﻿feature,forecast,nowcast
+regime_duration,0.0071,0.0051
+previous_regime_duration,0.0064,0.0024
+months_since_last_risk,0.0063,0.0097
+risk_frequency_24m,0.0374,0.0186
+regime_change_count_24m,-0.0066,0.0095
+duration_percentile,0.005,-0.0029
