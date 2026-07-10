@@ -166,3 +166,21 @@ N5가 건드리지 않은 성장축 분기 해상도(QA §2의 기존 진단)다
 - data/analysis_outputs/labels_walkforward_{10y,5y,exp}_n3.csv (N3′)
 - scripts/regime_next_n1.py · scripts/regime_next_n3.py (각 파일 헤더에 사전 등록 원문)
 - 채택 라벨(data/regime/labels.csv, data/macro/regime_labels.csv)·태그: 무변경
+
+
+## J2 — 국면 생애(lifecycle) 특징 검정 (시도 1) → **기각 (개선 없음, 무기억 유지)**
+
+교수 제안(사이클 위치)의 인과적 재해석: cycle_position은 사이클 종점을 알아야 하는
+look-ahead라 특징으로 부적합 → 확정 라벨 이력만 쓰는 생애 특징 6종(지속 개월, 직전
+국면 지속, 위험 이후 경과, 24개월 위험 비율·전환 수, 완료 국면 대비 지속 백분위)으로
+재설계. 백분위는 "그 시점까지 완료된 국면"만 사용(절단 재계산 인과성 검증 통과).
+
+| 과제 | 기준(시장 특징 8종) | +생애 특징 6종 | 차이 | 판정 |
+|---|---|---|---|---|
+| nowcast | 1.2261 | 1.2555 | +0.0294 | 악화 |
+| forecast | 1.3773 | 1.3860 | +0.0087 | 악화 |
+
+사전 고정 기준(악화 +0.005 초과 시 기각)에 따라 기각. 해석: 이 표본(평가 115개월,
+4분류)에서 국면 전이의 지속 의존성 증거는 검출되지 않음 — 무기억 마코프(P³) 유지가
+데이터의 지지를 받음. 주의: 세션 분류기는 sklearn HistGB 폴백 — 로컬 TabPFN/LGBM
+재실행으로 확정 권장 (scripts/regime_next_j2_lifecycle.py 한 줄 실행).
