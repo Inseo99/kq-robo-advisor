@@ -160,8 +160,8 @@ def print_diagnostics(labels: pd.Series, cfg: LabelConfig) -> None:
 def export_labels(labels: pd.Series, force: bool = False) -> None:
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
     if OUT_CSV.exists() and not force:
-        print(f"\n[guard] {OUT_CSV} 는 채택 라벨입니다 (현행: N7 워크포워드 — "
-              f"재현은 scripts/regime_next_n7.py).")
+        print(f"\n[guard] {OUT_CSV} 는 채택 라벨입니다 (현행: N5 워크포워드 — "
+              f"재현은 scripts/regime_next_n5.py).")
         print("[guard] 이 스크립트의 구 규칙 라벨로 덮어쓰려면 --force 를 지정하세요. 저장 생략.")
         return
     labels.dropna().rename("regime").rename_axis("date").to_csv(OUT_CSV, encoding="utf-8-sig")

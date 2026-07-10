@@ -34,6 +34,7 @@ def _load(modname, fname):
 
 wf = _load("wf", "walkforward_labels.py")
 n7 = _load("n7mod", "regime_next_n7.py")
+n5 = _load("n5mod", "regime_next_n5.py")
 
 
 def main():
@@ -50,6 +51,7 @@ def main():
         t0 = t - pd.DateOffset(months=120)
         sliced = wf._slice_macro(macro, t0, t)
         v2 = wf._extract_label(wf._make_labels_v2(sliced), t)
+        n5_10y = wf._extract_label(n5.make_labels_n5(sliced), t)
         n7_10y = wf._extract_label(n7.make_labels_n7(sliced), t)
         n7_5y = wf._extract_label(n7.make_labels_n7(wf._slice_macro(macro, t - pd.DateOffset(months=60), t)), t)
         n7_exp = wf._extract_label(n7.make_labels_n7(wf._slice_macro(macro, None, t)), t)
@@ -59,7 +61,7 @@ def main():
         gdp_t = gdp[gdp.index <= t].iloc[-1] if len(gdp[gdp.index <= t]) else None
         rows.append({
             "month": t.strftime("%Y-%m"),
-            "V2_10y": v2, "N7_10y": n7_10y, "N7_5y": n7_5y, "N7_exp": n7_exp,
+            "V2_10y": v2, "N5_10y(채택)": n5_10y, "N7_10y(참고)": n7_10y, "N7_5y": n7_5y, "N7_exp": n7_exp,
             "N7_3창일치": "예" if n7_10y == n7_5y == n7_exp else "아니오",
             "실운영판정(수기)": "",
             "CPI_YoY": round(float(cpi_t), 2) if cpi_t is not None else None,

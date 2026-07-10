@@ -510,3 +510,10 @@ review-window tool. The next validation pass should separate:
 - 사전 등록 5시도(N1 기각, N3′ 대체, N5·N6 대안 보존, N7 합격) — regime_next_실험로그.md.
 - 채택 라벨 교체·ERC 재산출(비중 변화 ≤0.3%p)·타임라인/전이행렬 재생성 완료.
   상세: docs/REGIME_N7_ADOPTION.md. make_labels.py에 채택본 덮어쓰기 가드 추가.
+
+## 2026-07-10 — 최종 결정: N5 채택 (N7은 판정 로직 개선 후 재심의)
+
+- 확률 레이어 실측이 결정타: N7 라벨은 나우캐스트 스태그 확률을 2024년 78%로 경화
+  (완화 신호 소거), N5는 56%로 완화 표현. 판정 정직성 우선 원칙에 따라 N5 확정.
+- 기준 미달 1건(≤3개월 24 vs 23) 명기 채택 — docs/REGIME_FINAL_DECISION.md.
+- 라벨·ERC·전이행렬·나우캐스트 재산출, 가드·홀드아웃 대조표 갱신 완료.
