@@ -30,8 +30,10 @@ OUT_DIR = os.path.join(ROOT, "data", "analysis_outputs")
 WINDOWS = [("10y", 120), ("5y", 60), ("exp", None)]   # None = 확장창(최소 60개월)
 MIN_EXPANDING = 60
 LABEL_END = "2025-12-31"   # 홀드아웃: 2026년은 라벨 생성 제외 — 실운영 판정과의 비교군으로 보존
-INFLATION_AXIS = "cpi"     # "spread"(V1: 10y−3y 프록시) | "cpi"(V2: CPI YoY 실측)
-SUFFIX = "" if INFLATION_AXIS == "spread" else f"_{INFLATION_AXIS}"
+INFLATION_AXIS = "cpi"     # "spread"(V1) | "cpi"(V2/V3)
+GROWTH_AXIS = "gdp"        # "gdp"(분기 GDP — V1/V2) | "monthly3"(월별 3지표 다수결 — V3, 실증 기각)
+DECISION_RULE = "median"   # "median"(현행 V2) | "zscore"(z±0.5 밴드 + 밴드 내 상태 유지 — 사전 등록 실험)
+SUFFIX = ("" if INFLATION_AXIS == "spread" else f"_{INFLATION_AXIS}") + ("_v3" if GROWTH_AXIS == "monthly3" else "") + ("_z" if DECISION_RULE == "zscore" else "")
 
 
 MACRO_DIR = os.path.join(ROOT, "data", "macro")
@@ -72,13 +74,23 @@ def _load_macro_from_csv():
     cpi = _read_macro_csv("cpi_yoy")
     if cpi is not None:
         macro["cpi"] = pd.DataFrame({"CPI_YoY": cpi})
+    g3 = {}
+    for name in ("industrial_production", "exports_yoy", "leading_index_cycle"):
+        s = _read_macro_csv(name)
+        if s is not None:
+            g3[name] = s
+    if g3:
+        macro["growth_m"] = pd.DataFrame(g3)
     print("[입력] data/macro CSV 조립: gdp_qoq, treasury_10y, treasury_3y"
           + (", usdkrw" if fx is not None else "")
           + (", exports_yoy" if exp is not None else "")
           + (", cpi_yoy" if cpi is not None else "")
+          + (f", 월별성장 {len(g3)}종" if g3 else "")
           + " · 스프레드 = 10년 − 3년 (팀 관행)")
     if INFLATION_AXIS == "cpi" and cpi is None:
         raise SystemExit("[stop] V2(CPI 축) 지정됐으나 data/macro/cpi_yoy.csv 없음")
+    if GROWTH_AXIS == "monthly3" and len(g3) < 2:
+        raise SystemExit(f"[stop] V3(월별 성장 축)에 지표 2종 이상 필요 — 현재 {list(g3)}")
     return macro
 
 
@@ -96,12 +108,56 @@ def _make_labels_v2(macro_data):
     df = pd.DataFrame({"gdp_growth": gdp_q, "cpi_yoy": cpi_q}).dropna()
     if len(df) < 4:
         return pd.DataFrame()
-    hi_g = df["gdp_growth"] > df["gdp_growth"].median()
-    hi_p = df["cpi_yoy"] > df["cpi_yoy"].median()
+    hi_g = _axis_state(df["gdp_growth"], DECISION_RULE)
+    hi_p = _axis_state(df["cpi_yoy"], DECISION_RULE)
     lab = pd.Series("골디락스", index=df.index)
     lab[hi_g & hi_p] = "리플레이션"
     lab[~hi_g & hi_p] = "스태그플레이션"
     lab[~hi_g & ~hi_p] = "디플레이션"
+    df["regime"] = lab
+    return df
+
+
+def _axis_state(series, rule):
+    """축 상태 시퀀스: median 규칙 또는 z±0.5 밴드(밴드 내 직전 상태 유지)."""
+    if rule == "median" or series.std(ddof=1) == 0 or len(series) < 8:
+        return series > series.median()
+    z = (series - series.mean()) / series.std(ddof=1)
+    states, cur = [], bool(z.iloc[0] >= 0)
+    for v in z:
+        if v > 0.5:
+            cur = True
+        elif v < -0.5:
+            cur = False
+        states.append(cur)
+    return pd.Series(states, index=series.index)
+
+
+def _make_labels_v3(macro_data):
+    """V3 — 성장 축: 월별 지표 3종 각자 창 내 중앙값 대비 다수결(≥과반).
+    물가 축: CPI(V2 유지). 해상도: 월간(분기 각짐 해소). 가중치 튜닝 없음."""
+    if not macro_data or "growth_m" not in macro_data or "cpi" not in macro_data:
+        return pd.DataFrame()
+    gm = macro_data["growth_m"]
+    votes = []
+    for col in gm.columns:
+        s = gm[col].dropna().resample("ME").last().ffill()
+        if len(s) < 8:
+            continue
+        votes.append((s > s.median()).astype(int))
+    if len(votes) < 2:
+        return pd.DataFrame()
+    vote_df = pd.DataFrame({i: v for i, v in enumerate(votes)}).dropna()
+    growth_up = vote_df.mean(axis=1) >= 0.5
+    cpi_s = macro_data["cpi"].iloc[:, 0].dropna().resample("ME").last().ffill()
+    df = pd.DataFrame({"growth_up": growth_up, "cpi_yoy": cpi_s}).dropna()
+    if len(df) < 12:
+        return pd.DataFrame()
+    hi_p = df["cpi_yoy"] > df["cpi_yoy"].median()
+    lab = pd.Series("골디락스", index=df.index)
+    lab[df["growth_up"] & hi_p] = "리플레이션"
+    lab[~df["growth_up"] & hi_p] = "스태그플레이션"
+    lab[~df["growth_up"] & ~hi_p] = "디플레이션"
     df["regime"] = lab
     return df
 
@@ -185,7 +241,12 @@ def run():
             t0 = (t - pd.DateOffset(months=win)) if win is not None else None
             try:
                 sliced = _slice_macro(macro, t0, t)
-                res = _make_labels_v2(sliced) if INFLATION_AXIS == "cpi" else make_regime_labels(sliced)
+                if GROWTH_AXIS == "monthly3":
+                    res = _make_labels_v3(sliced)
+                elif INFLATION_AXIS == "cpi":
+                    res = _make_labels_v2(sliced)
+                else:
+                    res = make_regime_labels(sliced)
                 lab = _extract_label(res, t)
             except Exception as e:
                 lab = None
@@ -237,12 +298,16 @@ def run():
             cur, start = lab, dt
         prev = dt
     print(f"  {start:%Y-%m} ~ {prev:%Y-%m}  {cur}")
-    v1_path = os.path.join(OUT_DIR, "labels_walkforward_10y.csv")
+    base_file = "labels_walkforward_10y.csv"
+    if GROWTH_AXIS == "monthly3" or DECISION_RULE == "zscore":
+        base_file = "labels_walkforward_10y_cpi.csv"
+    v1_path = os.path.join(OUT_DIR, base_file)
     if SUFFIX and os.path.exists(v1_path):
         v1 = pd.read_csv(v1_path, index_col=0, parse_dates=True)["regime"]
         v2 = results["10y"]
-        both = pd.DataFrame({"V1_spread": v1, "V2_cpi": v2}).dropna()
-        print(f"\n=== V1(스프레드) vs V2(CPI) — 사전 등록 채점 (전체 일치율 {(both['V1_spread']==both['V2_cpi']).mean():.1%}) ===")
+        both = pd.DataFrame({"기준(현행)": v1, "신규": v2}).dropna()
+        base_name = "V2(CPI·median)" if (GROWTH_AXIS == "monthly3" or DECISION_RULE == "zscore") else "V1(스프레드)"
+        print(f"\n=== {base_name} vs 신규 — 사전 등록 채점 (전체 일치율 {(both['기준(현행)']==both['신규']).mean():.1%}) ===")
         checks = [("2020-03", "코로나 전환", "디플레이션 유지가 합격 (CPI 지연 시험대)"),
                   ("2021-09", "인플레기", "리플레/스태그로 교정되면 V2 승"),
                   ("2021-10", "인플레기", "동일"),
@@ -252,7 +317,11 @@ def run():
         for ym, desc, crit in checks:
             row = both[both.index.strftime("%Y-%m") == ym]
             if len(row):
-                print(f"  {ym} {desc}: V1={row['V1_spread'].iloc[0]} → V2={row['V2_cpi'].iloc[0]}  [{crit}]")
+                print(f"  {ym} {desc}: 기준={row.iloc[0, 0]} -> 신규={row.iloc[0, 1]}  [{crit}]")
+    tr = results["10y"]
+    n_tr = int((tr != tr.shift()).sum() - 1)
+    seg_len = tr.groupby((tr != tr.shift()).cumsum()).size()
+    print(f"\n[구조 지표] 전환 {n_tr}회 · 구간 {len(seg_len)}개 · 3개월 이하 구간 {(seg_len <= 3).sum()}개 · 최장 {seg_len.max()}개월")
     print("\n[다음 단계] 위 채점·일치율 검토 후, 채택하려면 파일 상단 주석의 복사 명령 실행")
 
 
