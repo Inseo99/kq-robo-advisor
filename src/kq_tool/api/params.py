@@ -47,7 +47,7 @@ def parse_strategy_backtest_params(query: QueryParams) -> StrategyBacktestParams
     """Parse `/api/stratbt` query parameters, including trading frictions."""
 
     return StrategyBacktestParams(
-        strategy=first_query_value(query, "s", "quant"),
+        strategy=first_query_value(query, "s", "s1m_lsv"),
         top_n=int(first_query_value(query, "n", "5")),
         rebalance=first_query_value(query, "r", "M"),
         period=first_query_value(query, "p", "3y"),

@@ -67,13 +67,13 @@ def test_run_strategy_backtest_action_parses_query_and_delegates_to_json_action(
         return action()
 
     result = run_strategy_backtest_action(
-        {"s": ["robo"], "n": ["7"], "r": ["Q"], "p": ["5y"], "tc": ["10"], "slip": ["5"]},
+        {"s": ["s3m_kang"], "n": ["7"], "r": ["Q"], "p": ["5y"], "tc": ["10"], "slip": ["5"]},
         run_strategy_backtest=run_strategy_backtest,
         json_action=json_action,
     )
 
-    assert result == {"strategy": "robo", "top_n": 7, "tc": 10.0, "slip": 5.0}
-    assert calls == [("json_action", None), ("stratbt", ("robo", 7, "Q", "5y", 10.0, 5.0))]
+    assert result == {"strategy": "s3m_kang", "top_n": 7, "tc": 10.0, "slip": 5.0}
+    assert calls == [("json_action", None), ("stratbt", ("s3m_kang", 7, "Q", "5y", 10.0, 5.0))]
 
 
 def test_run_strategy_backtest_action_uses_standard_trading_cost_defaults() -> None:
@@ -91,7 +91,7 @@ def test_run_strategy_backtest_action_uses_standard_trading_cost_defaults() -> N
     )
 
     assert result == {
-        "strategy": "quant",
+        "strategy": "s1m_lsv",
         "top_n": 5,
         "rebalance": "M",
         "period": "3y",

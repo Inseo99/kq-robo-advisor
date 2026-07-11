@@ -65,6 +65,18 @@ def optional_float(value: object) -> float | None:
     return numeric or None
 
 
+def numeric_or_none(value: object) -> float | None:
+    """Convert value to float while preserving negative values."""
+
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(numeric):
+        return None
+    return numeric
+
+
 def momentum_recent(close: pd.Series, lookback: int = 60) -> float | None:
     """Return recent price momentum for the operating screener."""
 
@@ -121,6 +133,28 @@ def build_screener_record(
     roe = optional_float(info.get("returnOnEquity"))
     eps = optional_float(info.get("trailingEps"))
     current = float(close.iloc[-1])
+    shares_outstanding = optional_float(info.get("sharesOutstanding"))
+    market_cap = optional_float(info.get("marketCap"))
+    market_cap_basis = str(info.get("marketCap_basis") or "source_market_cap")
+    if shares_outstanding is not None and shares_outstanding > 0 and current > 0:
+        market_cap = current * shares_outstanding
+        market_cap_basis = "current_price_x_shares"
+    operating_cashflow = numeric_or_none(info.get("operatingCashflow"))
+    free_cashflow = numeric_or_none(info.get("freeCashflow"))
+    if free_cashflow is None:
+        free_cashflow = operating_cashflow
+    net_income_common = numeric_or_none(info.get("netIncomeToCommon"))
+    net_income_ttm = numeric_or_none(info.get("netIncomeTTM"))
+    if net_income_ttm is None:
+        net_income_ttm = net_income_common
+    equity = optional_float(info.get("equity"))
+    total_assets = numeric_or_none(info.get("totalAssets"))
+    operating_income = numeric_or_none(info.get("operatingIncome"))
+    quality = roe
+    if operating_income is not None and total_assets is not None and total_assets > 0:
+        quality = operating_income / total_assets
+    if quality is None and net_income_ttm is not None and equity and equity > 0:
+        quality = net_income_ttm / equity
     change = float((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100) if len(close) > 1 else 0.0
     dcf_growth = reverse_dcf_growth(current, eps, required_return)
     score, signal = quick_robo_from_close(close)
@@ -129,9 +163,22 @@ def build_screener_record(
 
     return {
         "name": name,
+        "sector": str(info.get("sector") or ""),
         "pe": pe,
         "pbr": pbr,
         "roe": roe,
+        "mcap": market_cap,
+        "mcap_basis": market_cap_basis,
+        "shares_outstanding": shares_outstanding,
+        "free_cashflow": free_cashflow,
+        "net_income_ttm": net_income_ttm,
+        "operating_cashflow": operating_cashflow,
+        "net_income_common": net_income_common,
+        "total_assets": total_assets,
+        "operating_income": operating_income,
+        "kang_strict_source": info.get("kangStrictSource"),
+        "equity": equity,
+        "quality": quality,
         "mom": momentum,
         "s2_mom": s2_momentum,
         "cur": round(current, 0),

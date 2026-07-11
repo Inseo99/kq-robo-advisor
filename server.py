@@ -1,4 +1,4 @@
-
+﻿
 
 #!/usr/bin/env python3
 """
@@ -435,7 +435,10 @@ try:
     from kq_tool.screener.engine import build_screener_record as _kq_build_screener_record
     from kq_tool.screener.engine import latest_price_date_from_groups as _kq_latest_price_date_from_groups
     from kq_tool.screener.engine import prewarm_screener_cache as _kq_prewarm_screener_cache
+    from kq_tool.screener.strategies import SCREENER_DEFINITIONS as _KQ_SCREENER_DEFINITIONS
     from kq_tool.screener.strategies import build_screeners as _kq_build_screeners
+    from kq_tool.screener.strategies import screener_diagnostics as _kq_screener_diagnostics
+    from kq_tool.screener.strategies import screener_metadata as _kq_screener_metadata
     _KQ_SCREENER_HELPERS_READY = True
 except Exception as _screener_mod_e:
     print(f'  [module] src/kq_tool screener helper import 실패 - legacy 스크리너 함수 사용: {_screener_mod_e}')
@@ -443,7 +446,10 @@ except Exception as _screener_mod_e:
     _kq_build_screener_record = None
     _kq_latest_price_date_from_groups = None
     _kq_prewarm_screener_cache = None
+    _KQ_SCREENER_DEFINITIONS = None
     _kq_build_screeners = None
+    _kq_screener_diagnostics = None
+    _kq_screener_metadata = None
 
 # ── 엑셀 데이터 로더 (선택적) ────────────────────────────────────────────
 # data/ 디렉토리에 엑셀 파일이 있으면 자동으로 활용:
@@ -462,7 +468,8 @@ try:
     _fin_n = len(_dl_mod._FIN_TICKERS_CACHE) if _dl_mod._FIN_TICKERS_CACHE else 0
     print(f'  [data] OK 종목 {len(EXCEL_DATA)}개, 재무 {_fin_n}개, 매크로 {len(EXCEL_MACRO)}시트 로드 완료')
 except Exception as _e:
-    print(f'  [data] 엑셀 데이터 없음 (yfinance 모드): {_e}')
+    _safe_e = repr(_e).encode('ascii', 'backslashreplace').decode('ascii')
+    print(f'  [data] 엑셀 데이터 없음 (yfinance 모드): {_safe_e}')
 
 # ── AI 시장 국면 모델 (TabPFN + HMM) ─────────────────────────────────────
 # 서버 시작 시 매크로 데이터로 자동 학습. 실패해도 서버는 계속 동작.
@@ -595,6 +602,114 @@ def _ticker_to_code(yt):
     if _KQ_MODULAR_HELPERS_READY:
         return _kq_ticker_to_code(yt)
     return yt.split('.')[0]
+
+
+YF_FUNDAMENTALS_CACHE_PATH = os.path.join(BASE_DIR, 'data', 'cache', 'fundamentals_yf.parquet')
+_YF_FUNDAMENTALS_CACHE = {'mtime': None, 'rows': None}
+
+
+def _finite_number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(number) or not np.isfinite(number):
+        return None
+    return number
+
+
+def _load_yf_fundamentals_cache():
+    """Load daily yfinance fundamental cache. No live network calls here."""
+
+    path = YF_FUNDAMENTALS_CACHE_PATH
+    if not os.path.exists(path):
+        _YF_FUNDAMENTALS_CACHE.update(mtime=None, rows={})
+        return {}
+    try:
+        mtime = os.path.getmtime(path)
+        if _YF_FUNDAMENTALS_CACHE.get('mtime') == mtime and _YF_FUNDAMENTALS_CACHE.get('rows') is not None:
+            return _YF_FUNDAMENTALS_CACHE['rows']
+        df = pd.read_parquet(path)
+        if 'ticker' not in df.columns:
+            rows = {}
+        else:
+            rows = {
+                str(row['ticker']): row.to_dict()
+                for _, row in df.iterrows()
+            }
+        _YF_FUNDAMENTALS_CACHE.update(mtime=mtime, rows=rows)
+        return rows
+    except Exception as exc:
+        print(f'  [screener] fundamentals_yf.parquet 로드 실패: {exc}')
+        _YF_FUNDAMENTALS_CACHE.update(mtime=None, rows={})
+        return {}
+
+
+def _has_yf_kang_strict_row(row):
+    return all(
+        (value is not None and value > 0)
+        for value in (
+            _finite_number(row.get('operating_cashflow')),
+            _finite_number(row.get('net_income_common')),
+            _finite_number(row.get('total_assets')),
+            _finite_number(row.get('operating_income')),
+        )
+    )
+
+
+def _apply_yf_fundamentals_cache(ticker, info):
+    rows = _load_yf_fundamentals_cache()
+    row = rows.get(ticker)
+    if not row:
+        return dict(info or {})
+
+    out = dict(info or {})
+    mapping = {
+        'operating_cashflow': 'operatingCashflow',
+        'net_income_common': 'netIncomeToCommon',
+        'total_assets': 'totalAssets',
+        'operating_income': 'operatingIncome',
+        'market_cap': 'marketCap',
+        'shares_outstanding': 'sharesOutstanding',
+        'current_price': 'currentPrice',
+    }
+    for source_key, target_key in mapping.items():
+        value = _finite_number(row.get(source_key))
+        if value is not None:
+            out[target_key] = value
+    if out.get('freeCashflow') is None and out.get('operatingCashflow') is not None:
+        out['freeCashflow'] = out['operatingCashflow']
+    if out.get('netIncomeTTM') is None and out.get('netIncomeToCommon') is not None:
+        out['netIncomeTTM'] = out['netIncomeToCommon']
+    if _has_yf_kang_strict_row(row):
+        out['kangStrictSource'] = 'yf_cache'
+    if _finite_number(row.get('market_cap')) is not None:
+        out['marketCap_basis'] = 'yf_cache_market_cap'
+    out['fundamentalYfCacheDate'] = row.get('fetched_at')
+    out['fundamentalYfCacheError'] = row.get('error')
+    return out
+
+
+def _yf_fundamentals_coverage(tickers):
+    rows = _load_yf_fundamentals_cache()
+    total = len(tickers)
+    covered = sum(1 for ticker in tickers if _has_yf_kang_strict_row(rows.get(ticker, {})))
+    exists = os.path.exists(YF_FUNDAMENTALS_CACHE_PATH)
+    ratio = (covered / total) if total else 0.0
+    fetched_values = [
+        row.get('fetched_at')
+        for ticker, row in rows.items()
+        if ticker in set(tickers) and row.get('fetched_at')
+    ]
+    return {
+        'cache_exists': exists,
+        'covered': covered,
+        'total': total,
+        'ratio': round(ratio, 4),
+        'display': f'{covered}/{total}',
+        'path': YF_FUNDAMENTALS_CACHE_PATH,
+        'latest_fetched_at': max(fetched_values) if fetched_values else None,
+    }
 
 
 def build_mcap_history(universe_dict, ticker_to_code_fn, fin_data, fin_tickers_cache=None):
@@ -869,7 +984,7 @@ def _fund_info(ticker, asof=None):
                             latest,
                             _fast_metric,
                         )
-                        return info, False
+                        return _apply_yf_fundamentals_cache(ticker, info), False
                     # 엑셀 메트릭 시트에서 PER·PBR·EPS·BPS 직접 조회 (있으면 우선)
                     pe_metric  = _fast_metric('per')
                     pbr_metric = _fast_metric('pbr')
@@ -909,7 +1024,7 @@ def _fund_info(ticker, asof=None):
                         bookValue       = bps_metric,
                         dividendYield   = (div_yield/100) if div_yield else None,
                     )
-                    return info, False
+                    return _apply_yf_fundamentals_cache(ticker, info), False
             except Exception as e:
                 pass
 
@@ -926,10 +1041,10 @@ def _fund_info(ticker, asof=None):
                 else bool(info and info.get('trailingPE'))
             )
             if has_info:
-                return info, False
+                return _apply_yf_fundamentals_cache(ticker, info), False
         except Exception:
             pass
-    return _sfund(ticker), True
+    return _apply_yf_fundamentals_cache(ticker, _sfund(ticker)), True
 
 # ── 기술적 지표 ──────────────────────────────────────────────────────────
 def _rsi(c, n=14):
@@ -1467,13 +1582,110 @@ def _prewarm_screener_cache():
     return
 
 
+US_SECTOR_ETFS = {
+    'XLK': ('Technology', ('IT', '전자', '반도체', '플랫폼')),
+    'XLY': ('Consumer Discretionary', ('자동차', '소비', '유통')),
+    'XLI': ('Industrials', ('산업', '기계', '조선', '건설', '운송', '지주')),
+    'XLV': ('Health Care', ('바이오', '헬스', '제약')),
+    'XLF': ('Financials', ('금융', '은행', '보험', '증권')),
+    'XLB': ('Materials', ('소재', '화학', '철강', '2차전지')),
+    'XLP': ('Consumer Staples', ('필수소비', '음식료', '생활소비')),
+    'XLE': ('Energy', ('에너지', '정유')),
+    'XLU': ('Utilities', ('유틸', '전력')),
+    'XLC': ('Communication Services', ('통신', '미디어', '엔터', '플랫폼')),
+}
+
+_US_SECTOR_CACHE = {'ts': 0.0, 'value': None}
+
+
+def _load_us_sector_signal(ttl_sec=1800):
+    """미국 섹터 ETF 12개월 수익률로 상위 3섹터를 계산한다.
+
+    이 값은 실제 매수 유니버스가 아니라 한국 종목 후보를 좁히는 온도계다.
+    실패해도 스크리너 전체를 죽이지 않고 diagnostics에 사유를 남긴다.
+    """
+
+    now = time.time()
+    cached = _US_SECTOR_CACHE.get('value')
+    if cached is not None and now - float(_US_SECTOR_CACHE.get('ts') or 0) < ttl_sec:
+        return cached
+
+    out = {
+        'loaded': 0,
+        'top3': [],
+        'returns': {},
+        'error': None,
+    }
+    try:
+        if not _ensure_yf_session():
+            out['error'] = 'yfinance 세션 확인 실패'
+            _US_SECTOR_CACHE.update(ts=now, value=out)
+            return out
+        import yfinance as yf
+        for ticker, (name, _keywords) in US_SECTOR_ETFS.items():
+            hist = _yf_retry(lambda t=ticker: yf.Ticker(t).history(period='13mo'), tries=2)
+            if hist is None or getattr(hist, 'empty', True):
+                continue
+            close = _c(hist).dropna()
+            if len(close) < 40:
+                continue
+            base = float(close.iloc[-252]) if len(close) >= 252 else float(close.iloc[0])
+            last = float(close.iloc[-1])
+            if base <= 0 or last <= 0:
+                continue
+            ret = last / base - 1.0
+            out['returns'][ticker] = {
+                'ticker': ticker,
+                'sector': name,
+                'return_12m': round(ret, 4),
+            }
+        ranked = sorted(out['returns'].values(), key=lambda row: row['return_12m'], reverse=True)
+        out['loaded'] = len(ranked)
+        out['top3'] = ranked[:3]
+        if not out['top3']:
+            out['error'] = '미국 섹터 ETF 수익률 계산 결과 없음'
+    except Exception as exc:
+        out['error'] = str(exc)
+    _US_SECTOR_CACHE.update(ts=now, value=out)
+    return out
+
+
+def _filter_results_by_us_sector(results, sector_signal):
+    top3 = sector_signal.get('top3') if isinstance(sector_signal, dict) else []
+    if not top3:
+        return results, 0, '미국 섹터 상위3 계산 실패 - 전체 후보로 fallback'
+
+    top_tickers = [row.get('ticker') for row in top3 if row.get('ticker') in US_SECTOR_ETFS]
+    keywords = []
+    for ticker in top_tickers:
+        keywords.extend(US_SECTOR_ETFS[ticker][1])
+
+    def _matches(sector):
+        text = str(sector or '')
+        return any(keyword in text for keyword in keywords)
+
+    filtered = {
+        ticker: data
+        for ticker, data in results.items()
+        if _matches(data.get('sector'))
+    }
+    if not filtered:
+        return results, 0, '미국 상위3 섹터와 매칭되는 한국 섹터 후보 0개 - 전체 후보로 fallback'
+    return filtered, len(filtered), None
+
+
 def _fetch_one(ticker):
     try:
         import yfinance as yf
         df, _ = _dl(ticker,'1y')
         info, _ = _fund_info(ticker)
         c = _c(df)
-        name = UNIVERSE.get(ticker, (ticker,'?'))[0]
+        uni_meta = UNIVERSE.get(ticker, (ticker,''))
+        name = uni_meta[0]
+        sector = uni_meta[1] if len(uni_meta) > 1 else ''
+        if isinstance(info, dict):
+            info = dict(info)
+            info.setdefault('sector', sector)
         if _KQ_SCREENER_HELPERS_READY:
             return ticker, _kq_build_screener_record(ticker, name, c, info, RF + ERP)
         mom = float(c.iloc[-1] / c.iloc[-60] - 1) if len(c)>=60 and float(c.iloc[-60]) > 0 else None
@@ -1497,7 +1709,7 @@ def _fetch_one(ticker):
         # 종목 이름 가져오기 (UNIVERSE 딕셔너리에서)
         return ticker, dict(name=name,pe=pe,pbr=pbr,roe=roe,mom=mom,s2_mom=s2_mom,cur=round(cur,0),chg=round(chg,2),
                             dcf_g=round(dcf_g,4) if dcf_g is not None else None,
-                            score=score,signal=sig)
+                            score=score,signal=sig,sector=sector)
     except:
         return ticker, None
 
@@ -1524,6 +1736,7 @@ def _run_screener():
         print(f'  [screener] 시가총액 상위 {len(candidates)}개로 제한')
 
     _prewarm_screener_cache()
+    yf_fundamentals_coverage = _yf_fundamentals_coverage(candidates)
 
     with ThreadPoolExecutor(max_workers=4) as ex:
         futs = {ex.submit(_fetch_one, t): t for t in candidates}
@@ -1531,31 +1744,65 @@ def _run_screener():
             t, d = f.result()
             if d: results[t] = d
 
+    sector_signal = _load_us_sector_signal()
+    ranking_results, sector_filtered_count, sector_filter_warning = _filter_results_by_us_sector(
+        results, sector_signal
+    )
+
     def rank(key, rev=False, allow_nonpositive=False):
-        pairs = [(t,d[key]) for t,d in results.items() if d.get(key) is not None
+        pairs = [(t,d[key]) for t,d in ranking_results.items() if d.get(key) is not None
                  and not (isinstance(d[key],float) and np.isnan(d[key])) and
                  (allow_nonpositive or (d[key]>0 if not rev else True))]
         pairs.sort(key=lambda x:x[1], reverse=rev)
         return [t for t,_ in pairs[:8]]
 
     if _KQ_SCREENER_HELPERS_READY:
-        screeners = _kq_build_screeners(results)
-        # 기존 UI는 5개 스크리너 버튼을 기준으로 구성되어 있어 응답 표면을 유지한다.
-        screeners.pop('로보매수', None)
+        screeners = _kq_build_screeners(ranking_results)
     else:
         screeners = {
-            '저PER':    rank('pe'),
-            '저PBR':    rank('pbr'),
-            '고ROE':    rank('roe',rev=True),
-            '모멘텀':   rank('mom',rev=True),
-            '역방향DCF': rank('dcf_g', allow_nonpositive=True),  # 낮은 내재성장률 = 저평가 후보
-            'S2모멘텀': rank('s2_mom',rev=True),
+            's1m_lsv': rank('pe'),
+            's2m_lsv': rank('pe'),
+            's3m_lsv': rank('pe'),
+            's1m_kang': rank('roe',rev=True),
+            's2m_kang': rank('roe',rev=True),
+            's3m_kang': rank('roe',rev=True),
         }
+
+    if _kq_screener_diagnostics is not None:
+        diagnostics = _kq_screener_diagnostics(ranking_results, screeners)
+    else:
+        diagnostics = {}
+    diagnostics.update({
+        'us_sectors_loaded': sector_signal.get('loaded', 0),
+        'top3_sectors': sector_signal.get('top3', []),
+        'us_sector_error': sector_signal.get('error'),
+        'sector_filter_count': sector_filtered_count,
+        'sector_filter_warning': sector_filter_warning,
+        'ranking_pool_count': len(ranking_results),
+        'universe_result_count': len(results),
+        'fundamentals_coverage': yf_fundamentals_coverage,
+    })
+    if not yf_fundamentals_coverage.get('cache_exists'):
+        diagnostics.setdefault('warnings', []).append(
+            'fundamentals_yf.parquet 캐시가 없어 Kang은 ROE fallback으로 표시됩니다.'
+        )
+    elif float(yf_fundamentals_coverage.get('ratio') or 0) < 0.8:
+        diagnostics.setdefault('warnings', []).append(
+            f"yfinance 정식 재무필드 커버리지가 낮습니다: {yf_fundamentals_coverage.get('display')}"
+        )
+    if sector_signal.get('error'):
+        diagnostics.setdefault('warnings', []).append(
+            f"미국 섹터 ETF 계산 실패: {sector_signal.get('error')}"
+        )
+    if sector_filter_warning:
+        diagnostics.setdefault('warnings', []).append(sector_filter_warning)
 
     return dict(
         data=results,
         price_date=price_date,
-        screeners=screeners
+        screeners=screeners,
+        screener_meta=_kq_screener_metadata() if _kq_screener_metadata is not None else [],
+        screener_diagnostics=diagnostics,
     )
 
 # ── 위험기반 자산배분 (GMV · MDP · ERC) ──────────────────────────────────
@@ -1852,15 +2099,38 @@ def _build_macro():
 MACRO = _build_macro()
 
 # ─────────────────────────────────────────────────────────────────────────
-#  전략 백테스트 (개별 종목 전략 + KOSPI 벤치마크 비교)
+#  전략 백테스트 (6개 섹터·팩터 전략 + KODEX200 벤치마크 비교)
 # ─────────────────────────────────────────────────────────────────────────
-KOSPI_TICKER = '^KS11'   # KOSPI 지수
+KODEX200_TICKER = '069500.KS'
+KODEX200_CODE = '069500'
+DISPLAY_NAME_QUALITY = getattr(__import__('kq_tool.screener', fromlist=['DISPLAY_NAME_QUALITY']), 'DISPLAY_NAME_QUALITY', '중형성장주')
+SECTOR_FACTOR_BT_KEYS = tuple(
+    (_KQ_SCREENER_DEFINITIONS or {
+        's1m_lsv': {},
+        's2m_lsv': {},
+        's3m_lsv': {},
+        's1m_kang': {},
+        's2m_kang': {},
+        's3m_kang': {},
+    }).keys()
+)
 
 def _strategy_key(name, fallback):
     return name.key if name is not None else fallback
 
+def _sector_factor_strategy_label(strategy):
+    meta = (_KQ_SCREENER_DEFINITIONS or {}).get(strategy, {})
+    return meta.get('label') or {
+        's1m_lsv': 'M1 LSV',
+        's2m_lsv': 'M2 LSV',
+        's3m_lsv': 'M3 LSV',
+        's1m_kang': f'M1 {DISPLAY_NAME_QUALITY}',
+        's2m_kang': f'M2 {DISPLAY_NAME_QUALITY}',
+        's3m_kang': f'M3 {DISPLAY_NAME_QUALITY}',
+    }.get(strategy, strategy)
+
 def run_strategy_backtest(
-    strategy='quant',
+    strategy='s1m_lsv',
     top_n=5,
     rebalance='M',
     period='3y',
@@ -1869,20 +2139,28 @@ def run_strategy_backtest(
 ):
     transaction_cost_bps = float(transaction_cost_bps)
     slippage_bps = float(slippage_bps)
-    quant_compare_key = _strategy_key(_KQ_QUANT_COMPARE, 'quant_compare')
-    if strategy == quant_compare_key:
-        key = f'stratbt_compare:{top_n}:{rebalance}:{period}:tc{transaction_cost_bps}:slip{slippage_bps}'
+    strategy = str(strategy or 's1m_lsv')
+    if strategy in ('all', 'compare', 'all_compare'):
+        key = f'sector_factor_stratbt_all:{top_n}:{rebalance}:{period}:tc{transaction_cost_bps}:slip{slippage_bps}'
         return _cached(
             key,
             1800,
-            _run_quant_comparison_backtest,
+            _run_strategy_backtest_all,
             top_n,
             rebalance,
             period,
             transaction_cost_bps,
             slippage_bps,
         )
-    key = f'stratbt:{strategy}:{top_n}:{rebalance}:{period}:tc{transaction_cost_bps}:slip{slippage_bps}'
+    if strategy not in SECTOR_FACTOR_BT_KEYS:
+        return {
+            'error': (
+                '전략검증 탭은 M1/M2/M3 LSV와 M1/M2/M3 중형성장주 '
+                '6개 전략만 지원합니다. 기존 퀀트/로보 백엔드는 제거되었습니다.'
+            ),
+            'allowed_strategies': list(SECTOR_FACTOR_BT_KEYS),
+        }
+    key = f'sector_factor_stratbt:{strategy}:{top_n}:{rebalance}:{period}:tc{transaction_cost_bps}:slip{slippage_bps}'
     return _cached(
         key,
         1800,
@@ -1896,69 +2174,13 @@ def run_strategy_backtest(
     )
 
 def _run_quant_comparison_backtest(top_n, rebalance, period, transaction_cost_bps=0.0, slippage_bps=0.0):
-    quant_key = _strategy_key(_KQ_QUANT, 'quant')
-    quant_on_key = _strategy_key(_KQ_QUANT_ROBO_FILTER, 'quant_robo_filter')
-    quant_s2_key = _strategy_key(_KQ_QUANT_S2, 'quant_s2')
-    quant_s2_on_key = _strategy_key(_KQ_QUANT_S2_ROBO_FILTER, 'quant_s2_robo_filter')
-    quant_label = (
-        _kq_strategy_descriptor(quant_key).label
-        if _kq_strategy_descriptor is not None else '퀀트(모멘텀)'
-    )
-    quant_on_label = (
-        _kq_strategy_descriptor(quant_on_key).label
-        if _kq_strategy_descriptor is not None else '퀀트+로보필터'
-    )
-    quant_s2_label = (
-        _kq_strategy_descriptor(quant_s2_key).label
-        if _kq_strategy_descriptor is not None else '퀀트(S2모멘텀)'
-    )
-    quant_s2_on_label = (
-        _kq_strategy_descriptor(quant_s2_on_key).label
-        if _kq_strategy_descriptor is not None else 'S2+로보필터'
-    )
-    momentum = run_strategy_backtest(
-        quant_key, top_n, rebalance, period, transaction_cost_bps, slippage_bps
-    )
-    if momentum.get('error'):
-        return {'error': f"{quant_label}: {momentum.get('error')}"}
-
-    momentum_on = run_strategy_backtest(
-        quant_on_key, top_n, rebalance, period, transaction_cost_bps, slippage_bps
-    )
-    if momentum_on.get('error'):
-        return {'error': f"{quant_on_label}: {momentum_on.get('error')}"}
-
-    s2 = run_strategy_backtest(
-        quant_s2_key, top_n, rebalance, period, transaction_cost_bps, slippage_bps
-    )
-    if s2.get('error'):
-        return {'error': f"{quant_s2_label}: {s2.get('error')}"}
-
-    s2_on = run_strategy_backtest(
-        quant_s2_on_key, top_n, rebalance, period, transaction_cost_bps, slippage_bps
-    )
-    if s2_on.get('error'):
-        return {'error': f"{quant_s2_on_label}: {s2_on.get('error')}"}
-
-    if _kq_build_quant_comparison_response is not None:
-        return _kq_build_quant_comparison_response(momentum, momentum_on, s2, s2_on)
-
-    payload = dict(momentum)
-    payload['strategy'] = 'quant_compare'
-    payload['comparison_runs'] = [
-        {'label': '퀀트(모멘텀) OFF', 'color': '#388bfd', 'data': momentum},
-        {'label': '퀀트(모멘텀) ON', 'color': '#79c0ff', 'data': momentum_on},
-        {'label': '퀀트(S2모멘텀) OFF', 'color': '#3fb950', 'data': s2},
-        {'label': '퀀트(S2모멘텀) ON', 'color': '#56d364', 'data': s2_on},
-    ]
-    payload['comparison_benchmark'] = {
-        'label': 'KOSPI',
-        'color': '#8b949e',
-        'dates': momentum.get('benchmark_dates') or [],
-        'equity': momentum.get('benchmark') or [],
-        'metrics': momentum.get('bench_metrics') or {},
+    return {
+        'error': (
+            '기존 전략검증 비교 백엔드는 제거되었습니다. '
+            'M1/M2/M3 LSV 또는 M1/M2/M3 중형성장주를 선택하세요.'
+        ),
+        'allowed_strategies': list(SECTOR_FACTOR_BT_KEYS),
     }
-    return payload
 
 def _perf_metrics(equity, freq_per_year=12):
     if _KQ_BACKTEST_HELPERS_READY:
@@ -2387,6 +2609,682 @@ def _select_for_bt(hist, strategy, top_n, precomputed=None, cur_date=None):
     return list(hist.columns[:top_n])
 
 
+
+_T1_MARKET_CACHE = None
+
+def _sector_factor_bt_records(price_df):
+    """Build static screener records once, then refresh price-dependent fields by date."""
+
+    records = {}
+    _prewarm_screener_cache()
+    for ticker in price_df.columns:
+        close = pd.to_numeric(price_df[ticker], errors='coerce').dropna()
+        if len(close) < 60:
+            continue
+        meta = UNIVERSE.get(ticker, (ticker, ''))
+        name = meta[0] if meta else ticker
+        sector = meta[1] if len(meta) > 1 else ''
+        info, _ = _fund_info(ticker)
+        info = dict(info or {})
+        info.setdefault('sector', sector)
+        if _kq_build_screener_record is not None:
+            records[ticker] = _kq_build_screener_record(ticker, name, close, info, RF + ERP)
+        else:
+            records[ticker] = {
+                'name': name,
+                'sector': sector,
+                'pe': _finite_number(info.get('trailingPE')),
+                'pbr': _finite_number(info.get('priceToBook')),
+                'roe': _finite_number(info.get('returnOnEquity')),
+                'mcap': _finite_number(info.get('marketCap')),
+                'quality': _finite_number(info.get('returnOnEquity')),
+                'shares_outstanding': _finite_number(info.get('sharesOutstanding')),
+            }
+    return records
+
+def _sector_factor_records_at(records, hist):
+    out = {}
+    for ticker in hist.columns:
+        rec = records.get(ticker)
+        if not rec:
+            continue
+        series = pd.to_numeric(hist[ticker], errors='coerce').dropna()
+        if series.empty:
+            continue
+        cur = float(series.iloc[-1])
+        row = dict(rec)
+        row['cur'] = round(cur, 0)
+        shares = _finite_number(row.get('shares_outstanding'))
+        if shares and shares > 0 and cur > 0:
+            row['mcap'] = cur * shares
+            row['mcap_basis'] = 'backtest_price_x_shares'
+        out[ticker] = row
+    return out
+
+def _select_sector_factor_for_bt(hist, strategy, top_n, records):
+    current_records = _sector_factor_records_at(records, hist)
+    if not current_records:
+        return []
+    if _kq_build_screeners is not None:
+        screeners = _kq_build_screeners(current_records, limit=max(top_n, 8))
+        return list(screeners.get(strategy, []))[:top_n]
+    if 'kang' in strategy:
+        ranked = [
+            (ticker, data.get('mcap'), data.get('quality'))
+            for ticker, data in current_records.items()
+            if data.get('mcap') and data.get('quality')
+        ]
+        ranked.sort(key=lambda item: (float(item[1]), item[0]))
+        small = ranked[:max(1, int(np.ceil(len(ranked) * 0.5)))]
+        small.sort(key=lambda item: (-float(item[2]), float(item[1]), item[0]))
+        return [ticker for ticker, *_ in small[:top_n]]
+    ranked = []
+    for ticker, data in current_records.items():
+        pe = _finite_number(data.get('pe'))
+        pbr = _finite_number(data.get('pbr'))
+        if pe is not None and pe > 0 and pbr is not None and pbr > 0:
+            ranked.append((ticker, pe, pbr))
+    pe_rank = {ticker: idx + 1 for idx, (ticker, _, _) in enumerate(sorted(ranked, key=lambda x: (x[1], x[0])))}
+    pbr_rank = {ticker: idx + 1 for idx, (ticker, _, _) in enumerate(sorted(ranked, key=lambda x: (x[2], x[0])))}
+    scored = [(ticker, pe_rank[ticker] + pbr_rank[ticker], pe, pbr) for ticker, pe, pbr in ranked]
+    scored.sort(key=lambda x: (x[1], x[2], x[3], x[0]))
+    return [ticker for ticker, *_ in scored[:top_n]]
+
+def _load_t1_market_panel():
+    global _T1_MARKET_CACHE
+    if _T1_MARKET_CACHE is not None:
+        return _T1_MARKET_CACHE
+    frames = []
+    for rel in (os.path.join('backtest-ksj', 'data', 'market_2000_2026.csv'),
+                os.path.join('backtest-ksj', 'data', 'liquidity_2000_2026.csv')):
+        path = os.path.join(BASE_DIR, rel)
+        if not os.path.exists(path):
+            continue
+        try:
+            raw = pd.read_csv(path, parse_dates=['date'])
+            pivot = raw.pivot_table(index='date', columns='ticker', values='value', aggfunc='last')
+            frames.append(pivot.apply(pd.to_numeric, errors='coerce'))
+        except Exception:
+            continue
+    _T1_MARKET_CACHE = pd.concat(frames, axis=1).sort_index().ffill() if frames else pd.DataFrame()
+    return _T1_MARKET_CACHE
+
+def _t1_risk_gate(cur_date):
+    panel = _load_t1_market_panel()
+    if panel is None or panel.empty:
+        return False, {'enabled': False, 'reason': 't1 시장 데이터 파일 없음'}
+    monthly = panel.resample('ME').last().loc[:cur_date]
+    if len(monthly) < 10:
+        return False, {'enabled': False, 'reason': 't1 시장 데이터 워밍업 부족'}
+    risks = {}
+    sp = pd.to_numeric(monthly.get('sp500'), errors='coerce').dropna() if 'sp500' in monthly else pd.Series(dtype=float)
+    if len(sp) >= 9:
+        risks['sp500_below_9m_ma'] = bool(float(sp.iloc[-1]) < float(sp.rolling(9).mean().iloc[-1]))
+    vix = pd.to_numeric(monthly.get('vix'), errors='coerce').dropna() if 'vix' in monthly else pd.Series(dtype=float)
+    if len(vix):
+        risks['vix_gt_18_6'] = bool(float(vix.iloc[-1]) > 18.6)
+    credit = pd.to_numeric(monthly.get('credit_spread'), errors='coerce').dropna() if 'credit_spread' in monthly else pd.Series(dtype=float)
+    if len(credit) >= 5:
+        mu = credit.rolling(5).mean().iloc[-1]
+        sd = credit.rolling(5).std().iloc[-1]
+        z = (credit.iloc[-1] - mu) / sd if sd and np.isfinite(sd) else 0.0
+        risks['credit_z_gt_1_78'] = bool(float(z) > 1.78)
+    count = sum(bool(v) for v in risks.values())
+    return count >= 2, {'enabled': True, 'risk_count': count, 'signals': risks}
+
+def _t2_kodex_gate(cur_date, benchmark):
+    series = pd.to_numeric(benchmark, errors='coerce').dropna()
+    monthly = series.resample('ME').last().loc[:cur_date]
+    if len(monthly) < 10:
+        return False, {'enabled': False, 'reason': 'KODEX200 10개월 MA 워밍업 부족'}
+    current = float(monthly.iloc[-1])
+    ma10 = float(monthly.rolling(10).mean().iloc[-1])
+    return current < ma10, {'enabled': True, 'current': round(current, 2), 'ma10': round(ma10, 2)}
+
+def _cash_period_return(cur_date, next_date, annual_rate=0.02):
+    days = max(1, (pd.Timestamp(next_date) - pd.Timestamp(cur_date)).days)
+    return float((1.0 + annual_rate) ** (days / 365.0) - 1.0)
+
+def _equal_weight_period_return_local(period_prices, selected):
+    if len(period_prices) < 2 or not selected:
+        return None
+    returns = []
+    for ticker in selected:
+        if ticker not in period_prices.columns:
+            continue
+        series = pd.to_numeric(period_prices[ticker], errors='coerce').dropna()
+        if len(series) < 2 or float(series.iloc[0]) <= 0:
+            continue
+        returns.append(float(series.iloc[-1] / series.iloc[0] - 1.0))
+    if not returns:
+        return None
+    return float(np.mean(returns))
+
+def _portfolio_turnover_local(previous_weights, target_weights):
+    previous_weights = previous_weights or {}
+    target_weights = target_weights or {}
+    keys = set(previous_weights).union(target_weights)
+    return float(sum(abs(float(target_weights.get(k, 0.0)) - float(previous_weights.get(k, 0.0))) for k in keys))
+
+def _actual_rebalance_dates_local(price_df, rule):
+    labels = price_df.resample(rule).last().index
+    dates = []
+    for label in labels:
+        eligible = price_df.index[price_df.index <= label]
+        if len(eligible):
+            date = eligible[-1]
+            if not dates or dates[-1] != date:
+                dates.append(date)
+    return pd.DatetimeIndex(dates)
+
+def _load_kodex200_benchmark(close_panel, period, use_fixed_start, backtest_start):
+    bench = None
+    if close_panel is not None and KODEX200_CODE in close_panel.columns:
+        bench = pd.to_numeric(close_panel[KODEX200_CODE], errors='coerce').dropna()
+    if (bench is None or len(bench) < 30) and _kq_app_get_price_series is not None:
+        try:
+            bench = pd.to_numeric(_kq_app_get_price_series(KODEX200_TICKER), errors='coerce').dropna()
+        except Exception:
+            bench = None
+    if bench is None or len(bench) < 30:
+        df, _ = _dl(KODEX200_TICKER, period if not use_fixed_start else '12y')
+        bench = _c(df).dropna() if df is not None else None
+    if bench is None or len(bench) < 30:
+        return None
+    if use_fixed_start:
+        return bench[bench.index >= backtest_start]
+    days = _period_days(period, 1095)
+    cutoff = bench.index[-1] - pd.Timedelta(days=days)
+    return bench[bench.index >= cutoff]
+
+def _prepare_sector_factor_bt_context(top_n, rebalance, period):
+    backtest_start = pd.Timestamp('2014-01-01')
+    use_fixed_start = (
+        _kq_use_fixed_start_for_period(period)
+        if _kq_use_fixed_start_for_period is not None
+        else period in ('12y', '15y', '20y', 'max', None) or period not in ('1y', '2y', '3y', '5y', '7y')
+    )
+    try:
+        close_panel = _kq_app_load_close_panel() if _kq_app_load_close_panel is not None else None
+    except Exception as exc:
+        print(f'  [stratbt] 수정주가 패널 로드 실패: {exc}')
+        close_panel = None
+    if close_panel is None or close_panel.empty:
+        return None, {'error': '수정주가 패널(data/prices/close.csv)을 로드하지 못했습니다'}
+
+    px = {}
+    target_universe_size = max(int(top_n) * 6, min(150, len(UNIVERSE)))
+    candidates = get_top_marketcap_tickers(limit=target_universe_size)
+    try:
+        active_codes = set(_kq_app_get_universe()) if _kq_app_get_universe is not None else set(close_panel.columns)
+    except Exception:
+        active_codes = set(close_panel.columns)
+    for ticker in candidates:
+        code = _ticker_to_code(ticker)
+        if code in active_codes and code in close_panel.columns:
+            series = pd.to_numeric(close_panel[code], errors='coerce').dropna()
+            if len(series) >= 60:
+                px[ticker] = series
+    if len(px) < max(3, int(top_n)):
+        return None, {'error': f'백테스트 유니버스 부족: {len(px)}종목'}
+
+    price_df = pd.DataFrame(px).sort_index().ffill().dropna(how='all')
+    benchmark = _load_kodex200_benchmark(close_panel, period, use_fixed_start, backtest_start)
+    if benchmark is None or len(benchmark) < 30:
+        return None, {'error': 'KODEX200(069500) 벤치마크 가격을 로드하지 못했습니다'}
+
+    warmup_days = 365
+    if use_fixed_start:
+        price_df = price_df[price_df.index >= (backtest_start - pd.Timedelta(days=warmup_days))]
+        evaluation_start = backtest_start
+    else:
+        days = _period_days(period, 1095)
+        cutoff = price_df.index[-1] - pd.Timedelta(days=days + warmup_days)
+        price_df = price_df[price_df.index >= cutoff]
+        evaluation_start = price_df.index[-1] - pd.Timedelta(days=days)
+
+    valid_cols = [col for col in price_df.columns if price_df[col].notna().sum() >= 60]
+    price_df = price_df[valid_cols].ffill().dropna(how='all')
+    if price_df.empty:
+        return None, {'error': '기간 필터 후 유효 종목이 없습니다'}
+
+    records = _sector_factor_bt_records(price_df)
+    if not records:
+        return None, {'error': '스크리너 재무/팩터 레코드를 만들지 못했습니다'}
+
+    rule = {'M': 'ME', 'Q': 'QE', 'W': 'W'}.get(rebalance, 'ME')
+    months = price_df.loc[_actual_rebalance_dates_local(price_df, rule)]
+    if len(months) < 2:
+        return None, {'error': '리밸런싱 기간 부족'}
+
+    return dict(
+        backtest_start=backtest_start,
+        use_fixed_start=use_fixed_start,
+        price_df=price_df,
+        benchmark=benchmark,
+        records=records,
+        months=months,
+        evaluation_start=evaluation_start,
+        freq={'M': 12, 'Q': 4, 'W': 52}.get(rebalance, 12),
+        universe_note='앱 유니버스 기준 근사 백테스트 — 정본 수치는 검증 엔진(backtest-ksj, 시총 300·FnGuide 섹터·시점 재무) 결과이며 요약 카드에 게시',
+    ), None
+
+def _simulate_sector_factor_strategy(strategy, top_n, rebalance, period, transaction_cost_bps, slippage_bps, ctx,
+                                     selection_cache=None, gate_cache=None):
+    price_df = ctx['price_df']
+    benchmark = ctx['benchmark']
+    records = ctx['records']
+    months = ctx['months']
+    evaluation_start = ctx['evaluation_start']
+    selection_cache = selection_cache if selection_cache is not None else {}
+    gate_cache = gate_cache if gate_cache is not None else {}
+
+    equity = [100.0]
+    eq_dates = []
+    holdings_log = []
+    previous_weights = {}
+    total_turnover = 0.0
+    total_cost_rate = 0.0
+    gate_counts = {'t1_cash': 0, 't2_cash': 0, 'no_candidate_cash': 0}
+    gate_examples = []
+
+    def _selection_for(cur_date, hist):
+        track = 'kang' if 'kang' in strategy else 'lsv'
+        cache_key = (pd.Timestamp(cur_date), track)
+        if cache_key not in selection_cache:
+            proxy = 's1m_kang' if track == 'kang' else 's1m_lsv'
+            selection_cache[cache_key] = _select_sector_factor_for_bt(hist, proxy, int(top_n), records)
+        return list(selection_cache[cache_key])
+
+    def _gate_for(cur_date, gate_name):
+        cache_key = (pd.Timestamp(cur_date), gate_name)
+        if cache_key not in gate_cache:
+            if gate_name == 't1':
+                gate_cache[cache_key] = _t1_risk_gate(cur_date)
+            else:
+                gate_cache[cache_key] = _t2_kodex_gate(cur_date, benchmark)
+        return gate_cache[cache_key]
+
+    for idx in range(len(months) - 1):
+        cur_date = months.index[idx]
+        next_date = months.index[idx + 1]
+        if cur_date < evaluation_start:
+            continue
+        hist = price_df.loc[:cur_date]
+        if len(hist) < 60:
+            continue
+
+        gate_reason = None
+        selected = []
+        if strategy.startswith('s2'):
+            gated, info = _gate_for(cur_date, 't1')
+            if gated:
+                gate_reason = 't1_cash'
+                gate_counts['t1_cash'] += 1
+                if len(gate_examples) < 3:
+                    gate_examples.append({'date': cur_date.strftime('%Y-%m'), 'gate': 't1', 'info': info})
+        elif strategy.startswith('s3'):
+            gated, info = _gate_for(cur_date, 't2')
+            if gated:
+                gate_reason = 't2_cash'
+                gate_counts['t2_cash'] += 1
+                if len(gate_examples) < 3:
+                    gate_examples.append({'date': cur_date.strftime('%Y-%m'), 'gate': 't2', 'info': info})
+
+        if gate_reason is None:
+            selected = _selection_for(cur_date, hist)
+            if not selected:
+                gate_reason = 'no_candidate_cash'
+                gate_counts['no_candidate_cash'] += 1
+
+        period_prices = price_df.loc[cur_date:next_date]
+        if gate_reason:
+            gross_return = _cash_period_return(cur_date, next_date)
+            target_weights = {}
+        else:
+            gross_return = _equal_weight_period_return_local(period_prices, selected)
+            if gross_return is None:
+                continue
+            target_weights = {ticker: 1.0 / len(selected) for ticker in selected}
+
+        turnover = _portfolio_turnover_local(previous_weights, target_weights)
+        cost_rate = turnover * (max(0.0, float(transaction_cost_bps)) + max(0.0, float(slippage_bps))) / 10_000.0
+        net_return = float((1.0 + gross_return) * (1.0 - cost_rate) - 1.0)
+
+        if not eq_dates:
+            eq_dates.append(cur_date.strftime('%Y-%m-%d'))
+        equity.append(equity[-1] * (1.0 + net_return))
+        eq_dates.append(next_date.strftime('%Y-%m-%d'))
+        holdings_log.append({
+            'date': cur_date.strftime('%Y-%m'),
+            'tickers': ['현금'] if gate_reason else [UNIVERSE.get(t, (t,))[0] for t in selected],
+            'gate': gate_reason or 'invested',
+            'turnover': round(float(turnover), 4),
+            'cost_rate': round(float(cost_rate), 6),
+        })
+        previous_weights = target_weights
+        total_turnover += turnover
+        total_cost_rate += cost_rate
+
+    if not eq_dates:
+        return {'error': '백테스트 결과가 비어 있습니다'}
+
+    eq_series = pd.Series(equity, index=pd.to_datetime(eq_dates))
+    if _kq_underwater_curve is not None:
+        underwater = _kq_underwater_curve(eq_series)
+    else:
+        peak = eq_series.cummax()
+        underwater = [round(float((value - peak.iloc[i]) / peak.iloc[i]) * 100, 2) for i, value in enumerate(eq_series)]
+
+    return {
+        'strategy': strategy,
+        'strategy_label': _sector_factor_strategy_label(strategy),
+        'label': _sector_factor_strategy_label(strategy),
+        'top_n': top_n,
+        'rebalance': rebalance,
+        'period': period,
+        'equity': [round(float(v), 2) for v in eq_series.tolist()],
+        'dates': [d.strftime('%Y-%m-%d') for d in eq_series.index],
+        'underwater': underwater,
+        'metrics': _perf_metrics(eq_series, ctx['freq']),
+        'holdings': holdings_log[-6:],
+        'n_rebalance': len(holdings_log),
+        'gate_counts': gate_counts,
+        'gate_examples': gate_examples,
+        'costs': {
+            'transaction_cost_bps': float(transaction_cost_bps),
+            'slippage_bps': float(slippage_bps),
+            'total_turnover': round(float(total_turnover), 4),
+            'total_cost_rate': round(float(total_cost_rate), 6),
+        },
+        'returns_basis': 'net_after_transaction_costs_and_slippage',
+    }
+
+def _run_strategy_backtest_all(top_n, rebalance, period, transaction_cost_bps=0.0, slippage_bps=0.0):
+    ctx, err = _prepare_sector_factor_bt_context(top_n, rebalance, period)
+    if err:
+        return err
+
+    strategies = list(SECTOR_FACTOR_BT_KEYS)
+    colors = {
+        's1m_lsv': '#7bb5ff',
+        's2m_lsv': '#388bfd',
+        's3m_lsv': '#1f6feb',
+        's1m_kang': '#8be9a0',
+        's2m_kang': '#3fb950',
+        's3m_kang': '#238636',
+    }
+    selection_cache = {}
+    gate_cache = {}
+    runs = []
+    for strategy in strategies:
+        run = _simulate_sector_factor_strategy(
+            strategy,
+            top_n,
+            rebalance,
+            period,
+            transaction_cost_bps,
+            slippage_bps,
+            ctx,
+            selection_cache=selection_cache,
+            gate_cache=gate_cache,
+        )
+        if not run.get('error'):
+            run['color'] = colors.get(strategy, '#8b949e')
+            runs.append(run)
+
+    if not runs:
+        return {'error': '전체 비교 결과가 비어 있습니다'}
+
+    base_dates = pd.to_datetime(runs[0]['dates'])
+    base_index = pd.DatetimeIndex(base_dates)
+    benchmark = ctx['benchmark'][ctx['benchmark'].index >= base_index[0]]
+    if _kq_normalize_benchmark_to_equity is not None:
+        bench_vals, bench_dates = _kq_normalize_benchmark_to_equity(benchmark, base_index)
+    else:
+        kb = benchmark.reindex(base_index, method='ffill').dropna()
+        bench_vals, bench_dates = [], []
+        if len(kb) > 1:
+            kb = kb / kb.iloc[0] * 100
+            bench_vals = [round(float(v), 2) for v in kb.tolist()]
+            bench_dates = [d.strftime('%Y-%m-%d') for d in kb.index]
+
+    bench_metrics = {}
+    if bench_vals:
+        bench_series = pd.Series(bench_vals, index=pd.to_datetime(bench_dates))
+        bench_metrics = _perf_metrics(bench_series, ctx['freq'])
+
+    best = max(
+        runs,
+        key=lambda r: float((r.get('metrics') or {}).get('calmar') or -999),
+    )
+    return {
+        'strategy': 'all',
+        'strategy_label': '전체 비교',
+        'compare': True,
+        'runs': runs,
+        'best_strategy': best.get('strategy'),
+        'best_metric': 'Calmar',
+        'benchmark_label': 'KODEX200',
+        'benchmark': bench_vals,
+        'benchmark_dates': bench_dates,
+        'bench_metrics': bench_metrics,
+        'top_n': top_n,
+        'rebalance': rebalance,
+        'period': period,
+        'universe_count': len(ctx['price_df'].columns),
+        'universe_note': ctx['universe_note'],
+        'risk_free_rate': RF,
+        'returns_basis': 'net_after_transaction_costs_and_slippage',
+        'costs': {
+            'transaction_cost_bps': float(transaction_cost_bps),
+            'slippage_bps': float(slippage_bps),
+        },
+    }
+
+def _run_strategy_backtest(strategy, top_n, rebalance, period, transaction_cost_bps=0.0, slippage_bps=0.0):
+    """Six-strategy app approximation backtest. Old quant/robo backends are not used."""
+
+    if strategy not in SECTOR_FACTOR_BT_KEYS:
+        return {'error': '지원하지 않는 전략입니다', 'allowed_strategies': list(SECTOR_FACTOR_BT_KEYS)}
+    backtest_start = pd.Timestamp('2014-01-01')
+    use_fixed_start = (
+        _kq_use_fixed_start_for_period(period)
+        if _kq_use_fixed_start_for_period is not None
+        else period in ('12y', '15y', '20y', 'max', None) or period not in ('1y', '2y', '3y', '5y', '7y')
+    )
+
+    try:
+        close_panel = _kq_app_load_close_panel() if _kq_app_load_close_panel is not None else None
+    except Exception as exc:
+        print(f'  [stratbt] 수정주가 패널 로드 실패: {exc}')
+        close_panel = None
+    if close_panel is None or close_panel.empty:
+        return {'error': '수정주가 패널(data/prices/close.csv)을 로드하지 못했습니다'}
+
+    px = {}
+    target_universe_size = max(int(top_n) * 6, min(150, len(UNIVERSE)))
+    candidates = get_top_marketcap_tickers(limit=target_universe_size)
+    try:
+        active_codes = set(_kq_app_get_universe()) if _kq_app_get_universe is not None else set(close_panel.columns)
+    except Exception:
+        active_codes = set(close_panel.columns)
+    for ticker in candidates:
+        code = _ticker_to_code(ticker)
+        if code in active_codes and code in close_panel.columns:
+            series = pd.to_numeric(close_panel[code], errors='coerce').dropna()
+            if len(series) >= 60:
+                px[ticker] = series
+    if len(px) < max(3, int(top_n)):
+        return {'error': f'백테스트 유니버스 부족: {len(px)}종목'}
+
+    price_df = pd.DataFrame(px).sort_index().ffill().dropna(how='all')
+    benchmark = _load_kodex200_benchmark(close_panel, period, use_fixed_start, backtest_start)
+    if benchmark is None or len(benchmark) < 30:
+        return {'error': 'KODEX200(069500) 벤치마크 가격을 로드하지 못했습니다'}
+
+    warmup_days = 365
+    if use_fixed_start:
+        price_df = price_df[price_df.index >= (backtest_start - pd.Timedelta(days=warmup_days))]
+        evaluation_start = backtest_start
+    else:
+        days = _period_days(period, 1095)
+        cutoff = price_df.index[-1] - pd.Timedelta(days=days + warmup_days)
+        price_df = price_df[price_df.index >= cutoff]
+        evaluation_start = price_df.index[-1] - pd.Timedelta(days=days)
+    valid_cols = [col for col in price_df.columns if price_df[col].notna().sum() >= 60]
+    price_df = price_df[valid_cols].ffill().dropna(how='all')
+    if price_df.empty:
+        return {'error': '기간 필터 후 유효 종목이 없습니다'}
+
+    records = _sector_factor_bt_records(price_df)
+    if not records:
+        return {'error': '스크리너 재무/팩터 레코드를 만들지 못했습니다'}
+
+    rule = {'M': 'ME', 'Q': 'QE', 'W': 'W'}.get(rebalance, 'ME')
+    months = price_df.loc[_actual_rebalance_dates_local(price_df, rule)]
+    if len(months) < 2:
+        return {'error': '리밸런싱 기간 부족'}
+
+    equity = [100.0]
+    eq_dates = []
+    holdings_log = []
+    previous_weights = {}
+    total_turnover = 0.0
+    total_cost_rate = 0.0
+    gate_counts = {'t1_cash': 0, 't2_cash': 0, 'no_candidate_cash': 0}
+    gate_examples = []
+
+    for idx in range(len(months) - 1):
+        cur_date = months.index[idx]
+        next_date = months.index[idx + 1]
+        if cur_date < evaluation_start:
+            continue
+        hist = price_df.loc[:cur_date]
+        if len(hist) < 60:
+            continue
+
+        gate_reason = None
+        selected = []
+        if strategy.startswith('s2'):
+            gated, info = _t1_risk_gate(cur_date)
+            if gated:
+                gate_reason = 't1_cash'
+                gate_counts['t1_cash'] += 1
+                if len(gate_examples) < 3:
+                    gate_examples.append({'date': cur_date.strftime('%Y-%m'), 'gate': 't1', 'info': info})
+        elif strategy.startswith('s3'):
+            gated, info = _t2_kodex_gate(cur_date, benchmark)
+            if gated:
+                gate_reason = 't2_cash'
+                gate_counts['t2_cash'] += 1
+                if len(gate_examples) < 3:
+                    gate_examples.append({'date': cur_date.strftime('%Y-%m'), 'gate': 't2', 'info': info})
+
+        if gate_reason is None:
+            selected = _select_sector_factor_for_bt(hist, strategy, int(top_n), records)
+            if not selected:
+                gate_reason = 'no_candidate_cash'
+                gate_counts['no_candidate_cash'] += 1
+
+        period_prices = price_df.loc[cur_date:next_date]
+        if gate_reason:
+            gross_return = _cash_period_return(cur_date, next_date)
+            target_weights = {}
+        else:
+            gross_return = _equal_weight_period_return_local(period_prices, selected)
+            if gross_return is None:
+                continue
+            target_weights = {ticker: 1.0 / len(selected) for ticker in selected}
+
+        turnover = _portfolio_turnover_local(previous_weights, target_weights)
+        cost_rate = turnover * (max(0.0, float(transaction_cost_bps)) + max(0.0, float(slippage_bps))) / 10_000.0
+        net_return = float((1.0 + gross_return) * (1.0 - cost_rate) - 1.0)
+
+        if not eq_dates:
+            eq_dates.append(cur_date.strftime('%Y-%m-%d'))
+        equity.append(equity[-1] * (1.0 + net_return))
+        eq_dates.append(next_date.strftime('%Y-%m-%d'))
+        holdings_log.append({
+            'date': cur_date.strftime('%Y-%m'),
+            'tickers': ['현금'] if gate_reason else [UNIVERSE.get(t, (t,))[0] for t in selected],
+            'gate': gate_reason or 'invested',
+            'turnover': round(float(turnover), 4),
+            'cost_rate': round(float(cost_rate), 6),
+        })
+        previous_weights = target_weights
+        total_turnover += turnover
+        total_cost_rate += cost_rate
+
+    if not eq_dates:
+        return {'error': '백테스트 결과가 비어 있습니다'}
+    eq_series = pd.Series(equity, index=pd.to_datetime(eq_dates))
+    benchmark = benchmark[benchmark.index >= eq_series.index[0]]
+    if _kq_normalize_benchmark_to_equity is not None:
+        bench_vals, bench_dates = _kq_normalize_benchmark_to_equity(benchmark, eq_series.index)
+    else:
+        kb = benchmark.reindex(eq_series.index, method='ffill').dropna()
+        bench_vals, bench_dates = [], []
+        if len(kb) > 1:
+            kb = kb / kb.iloc[0] * 100
+            bench_vals = [round(float(v), 2) for v in kb.tolist()]
+            bench_dates = [d.strftime('%Y-%m-%d') for d in kb.index]
+
+    freq = {'M': 12, 'Q': 4, 'W': 52}.get(rebalance, 12)
+    strat_metrics = _perf_metrics(eq_series, freq)
+    bench_metrics = {}
+    excess = {}
+    if bench_vals:
+        bench_series = pd.Series(bench_vals, index=pd.to_datetime(bench_dates))
+        bench_metrics = _perf_metrics(bench_series, freq)
+        sr = eq_series.pct_change().dropna()
+        br = bench_series.pct_change().dropna()
+        common = sr.index.intersection(br.index)
+        if len(common) > 5:
+            srx, brx = sr.loc[common], br.loc[common]
+            beta = float(np.cov(srx, brx)[0, 1] / np.var(brx)) if np.var(brx) > 0 else 1.0
+            excess = {
+                'beta': round(beta, 3),
+                'alpha': round(strat_metrics.get('cagr', 0) - bench_metrics.get('cagr', 0), 2),
+                'excess_return': round(strat_metrics.get('total_return', 0) - bench_metrics.get('total_return', 0), 2),
+            }
+
+    if _kq_underwater_curve is not None:
+        underwater = _kq_underwater_curve(eq_series)
+    else:
+        peak = eq_series.cummax()
+        underwater = [round(float((value - peak.iloc[i]) / peak.iloc[i]) * 100, 2) for i, value in enumerate(eq_series)]
+
+    return {
+        'strategy': strategy,
+        'strategy_label': _sector_factor_strategy_label(strategy),
+        'top_n': top_n,
+        'rebalance': rebalance,
+        'period': period,
+        'benchmark_label': 'KODEX200',
+        'universe_count': len(price_df.columns),
+        'universe_note': '앱 유니버스 기준 근사 백테스트 — 정본 수치는 검증 엔진(backtest-ksj, 시총 300·FnGuide 섹터·시점 재무) 결과이며 요약 카드에 게시',
+        'equity': [round(float(v), 2) for v in eq_series.tolist()],
+        'dates': [d.strftime('%Y-%m-%d') for d in eq_series.index],
+        'benchmark': bench_vals,
+        'benchmark_dates': bench_dates,
+        'underwater': underwater,
+        'metrics': strat_metrics,
+        'bench_metrics': bench_metrics,
+        'excess': excess,
+        'risk_free_rate': RF,
+        'returns_basis': 'net_after_transaction_costs_and_slippage',
+        'holdings': holdings_log[-6:],
+        'n_rebalance': len(holdings_log),
+        'costs': {
+            'transaction_cost_bps': float(transaction_cost_bps),
+            'slippage_bps': float(slippage_bps),
+            'total_turnover': round(float(total_turnover), 4),
+            'total_cost_rate': round(float(total_cost_rate), 6),
+        },
+        'gate_counts': gate_counts,
+        'gate_examples': gate_examples,
+    }
 
 # ── 추천 포트폴리오 리포트 ────────────────────────────────────────────────
 def _normalize_weights(weights):
@@ -3253,6 +4151,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 

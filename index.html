@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -28,9 +28,9 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
 .qbtn{background:transparent;border:1px solid var(--bd);color:var(--mu);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap;flex-shrink:0}
 .qbtn:hover{color:var(--tx);border-color:var(--mu)}
 /* ── 메인 분할 ── */
-.main{display:grid;grid-template-columns:1fr 580px;overflow:hidden}
+.main{display:grid;grid-template-columns:minmax(360px,1fr) minmax(620px,1.6fr);overflow:hidden}
 /* ── 왼쪽: 차트 영역 ── */
-.chart-side{display:flex;flex-direction:column;border-right:1px solid var(--bd);overflow:hidden}
+.chart-side{display:flex;flex-direction:column;border-right:1px solid var(--bd);overflow:hidden;min-width:0}
 .stock-bar{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:12px;flex-shrink:0}
 .stock-bar .name{font-size:15px;font-weight:700}
 .stock-bar .price{font-size:18px;font-weight:700}
@@ -47,7 +47,8 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
 .chart-toolbar{height:34px;display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid #21262d;background:#0d1117;flex-shrink:0}
 .chart-toolbar .range{flex:1;min-width:120px;accent-color:var(--bl)}
 .chart-info{font-size:10px;color:var(--mu);white-space:nowrap;min-width:145px}
-.chart-area{flex:1;position:relative;min-height:0;padding:0 6px}
+.chart-area{flex:0 0 300px;height:300px;position:relative;min-height:0;padding:0 6px;transition:flex-basis .18s,height .18s}
+.chart-side.chart-expanded .chart-area{flex:1 1 auto;height:auto}
 #chart-price{width:100%;height:100%}
 .chart-bottom{height:90px;flex-shrink:0;padding:0 6px 4px;border-top:1px solid var(--bd)}
 .ind-tabs{display:flex;gap:8px;padding:4px 8px;background:var(--bg)}
@@ -140,6 +141,46 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
 .heatmap-cell{font-weight:700;border-radius:2px}
 .heatmap-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
 @media(max-width:760px){.order-controls{grid-template-columns:1fr 1fr}.order-controls button{grid-column:auto}}
+/* compact presentation mode */
+.panel-content{padding:8px}
+.section{margin-bottom:8px}
+.sec-head{margin-bottom:5px;font-size:10px;letter-spacing:.35px}
+.sig-table td{padding:3px 4px;font-size:11px}
+.screen-tbl{font-size:11px}
+.screen-tbl th{padding:4px 5px;font-size:10px}
+.screen-tbl td{padding:3px 5px}
+.chart-sm{height:220px;margin-bottom:6px}
+.chart-aux{height:120px!important}
+.metric-card{padding:6px 8px;border-radius:5px}
+.metric-val{font-size:13px}
+.metrics-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.score-big{padding:5px 0 3px}
+.score-num{font-size:28px}
+.score-bar-wrap{height:6px;margin:5px 0}
+.target-row{gap:5px;margin-top:5px}
+.target-box{padding:6px}
+.target-box .tv{font-size:12px}
+.stat-strip{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.stat-chip{flex:1;min-width:92px;background:#21262d;border:1px solid var(--bd);border-radius:5px;padding:5px 7px;line-height:1.25}
+.stat-chip b{display:block;font-size:13px}
+.stat-chip span{display:block;font-size:9px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-chip.good b{color:var(--gr)}
+.stat-chip.bad b{color:var(--rd)}
+.stat-chip.muted b{color:var(--mu)}
+.compact-note{font-size:10px;color:var(--mu);border:1px solid var(--bd);background:#161b22;border-radius:4px;padding:5px 7px;margin-bottom:6px;line-height:1.35}
+.compact-line{font-size:10px;color:var(--mu);line-height:1.35}
+.kq-details{border:1px solid var(--bd);background:#161b22;border-radius:5px;padding:5px 7px;margin:6px 0;font-size:10px;color:var(--mu)}
+.kq-details summary{cursor:pointer;color:var(--tx);font-weight:700}
+.kq-details[open]{padding-bottom:7px}
+#panel-stratbt .btn-primary{margin-bottom:6px!important}
+#panel-stratbt .strat-btn{padding:2px 7px;font-size:10px}
+#panel-stratbt .num-input{height:25px}
+.sf-card{border:1px solid var(--bd);border-radius:6px;padding:7px;background:#0d1117;margin-top:7px}
+.macro-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:1500px){.macro-grid{grid-template-columns:1fr}}
+.panel-content.panel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-content:start}
+.panel-content.panel-grid>.section{min-width:0;margin-bottom:0}
+@media(max-width:1350px){.main{grid-template-columns:1fr}.analysis-side{min-height:55vh}.panel-content.panel-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -205,6 +246,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
     <button class="pbtn" onclick="zoomChart(0.65)">확대</button>
     <button class="pbtn" onclick="zoomChart(1.55)">축소</button>
     <button class="pbtn" onclick="resetChartWindow()">전체보기</button>
+    <button class="pbtn" id="chart-expand-btn" onclick="toggleChartExpand()">차트 확대</button>
     <input id="chart-range" class="range" type="range" min="0" max="0" value="0" oninput="slideChartWindow(this.value)">
     <span id="chart-window-info" class="chart-info">-</span>
     <button class="pbtn" onclick="saveChartPng()">PNG</button>
@@ -307,23 +349,22 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
   <!-- 스크리너 -->
   <div id="panel-screen" class="panel-content" style="display:none">
     <div class="section">
-      <div class="sec-head">퀀트 스크리너 <span class="tag">KOSPI 시총 상위 200</span>
+      <div class="sec-head">전략 스크리너 <span class="tag">백테스트 6전략 현재 후보</span>
         <button class="btn btn-sm" onclick="loadScreener()">▶ 실행</button>
       </div>
       <div style="font-size:10px;color:var(--mu);margin-bottom:8px;padding:4px 8px;background:#21262d;border-radius:4px">
-        💡 가격 기준일: <span id="scr-date">엑셀 데이터 마지막 종가</span> (헤더는 yfinance 실시간 → 폭락주는 큰 차이 발생)
+        💡 가격 기준일: <span id="scr-date">수정주가 패널 최신 종가</span> · 백테스트 6전략의 종목선정 규칙을 현재 유니버스에 적용한 읽기 전용 후보입니다.
       </div>
       <div class="filter-row" id="scr-filters">
-        <button class="filter-btn active" onclick="setFilter('all',this)">전체</button>
-        <button class="filter-btn" onclick="setFilter('저PER',this)">저PER</button>
-        <button class="filter-btn" onclick="setFilter('저PBR',this)">저PBR</button>
-        <button class="filter-btn" onclick="setFilter('고ROE',this)">고ROE</button>
-        <button class="filter-btn" onclick="setFilter('모멘텀',this)">모멘텀</button>
-        <button class="filter-btn" onclick="setFilter('역방향DCF',this)">역방향DCF</button>
-        <button class="filter-btn" onclick="setFilter('S2모멘텀',this)">S2모멘텀</button>
+        <button class="filter-btn active" onclick="setFilter('s1m_lsv',this)">M1 LSV</button>
+        <button class="filter-btn" onclick="setFilter('s2m_lsv',this)">M2 LSV</button>
+        <button class="filter-btn" onclick="setFilter('s3m_lsv',this)">M3 LSV</button>
+        <button class="filter-btn" data-quality-tier="M1" onclick="setFilter('s1m_kang',this)">M1 중형성장주</button>
+        <button class="filter-btn" data-quality-tier="M2" onclick="setFilter('s2m_kang',this)">M2 중형성장주</button>
+        <button class="filter-btn" data-quality-tier="M3" onclick="setFilter('s3m_kang',this)">M3 중형성장주</button>
       </div>
       <div id="scr-content">
-        <div class="loading-msg">▶ 실행 버튼을 눌러 전체 스크리닝을 시작하세요</div>
+        <div class="loading-msg">▶ 실행 버튼을 눌러 6개 전략 후보를 계산하세요</div>
       </div>
     </div>
   </div>
@@ -359,13 +400,16 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
   <!-- 전략 검증 (백테스트) -->
   <div id="panel-stratbt" class="panel-content" style="display:none">
     <div class="section">
-      <div class="sec-head">전략 백테스트 + KOSPI 비교 <span class="tag">체크리스트</span></div>
+      <div class="sec-head">전략 백테스트 + KODEX200 비교 <span class="tag">앱 근사</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
         <span style="font-size:11px;color:var(--mu)">전략:</span>
-        <button class="strat-btn active" data-bs="quant_compare" onclick="selBtStrat(this)">로보필터 비교</button>
-        <button class="strat-btn" data-bs="quant" onclick="selBtStrat(this)">퀀트(모멘텀)</button>
-        <button class="strat-btn" data-bs="quant_s2" onclick="selBtStrat(this)">퀀트(S2모멘텀)</button>
-        <button class="strat-btn" data-bs="robo" onclick="selBtStrat(this)">로보신호</button>
+        <button class="strat-btn active" data-bs="all" onclick="selBtStrat(this)">전체 비교</button>
+        <button class="strat-btn" data-bs="s1m_lsv" onclick="selBtStrat(this)">M1 LSV</button>
+        <button class="strat-btn" data-bs="s2m_lsv" onclick="selBtStrat(this)">M2 LSV</button>
+        <button class="strat-btn" data-bs="s3m_lsv" onclick="selBtStrat(this)">M3 LSV</button>
+        <button class="strat-btn" data-bs="s1m_kang" data-quality-tier="M1" onclick="selBtStrat(this)">M1 중형성장주</button>
+        <button class="strat-btn" data-bs="s2m_kang" data-quality-tier="M2" onclick="selBtStrat(this)">M2 중형성장주</button>
+        <button class="strat-btn" data-bs="s3m_kang" data-quality-tier="M3" onclick="selBtStrat(this)">M3 중형성장주</button>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
         <span style="font-size:11px;color:var(--mu)">종목수:</span>
@@ -384,7 +428,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
       </div>
       <button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:10px" onclick="loadStratBt()">▶ 백테스트 실행</button>
       <div id="stratbt-content">
-        <div class="loading-msg">전략·옵션 선택 후 실행하세요<br><span style="font-size:10px">과거 3년 데이터로 검증 (30~60초 소요)</span></div>
+        <div class="loading-msg">전략·옵션 선택 후 실행하세요<br><span style="font-size:10px">6개 섹터·팩터 전략 앱 근사 백테스트 (30~60초 소요)</span></div>
       </div>
     </div>
     <div class="section">
@@ -404,18 +448,19 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
     </div>
 
     <!-- 현재 국면 큰 카드 -->
-    <div id="current-regime-card" style="border-radius:8px;padding:14px;margin-bottom:12px;border:2px solid transparent;background:#161b22">
+    <div id="current-regime-card" style="border-radius:8px;padding:9px;margin-bottom:8px;border:2px solid transparent;background:#161b22">
       <div style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">현재 국면</div>
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
-        <div id="regime-name" style="font-size:22px;font-weight:800">-</div>
+        <div id="regime-name" style="font-size:18px;font-weight:800">-</div>
         <div id="regime-confidence" style="font-size:13px;font-weight:600">-</div>
       </div>
       <div id="regime-label" style="font-size:11px;color:var(--mu);margin-bottom:6px">-</div>
-      <div id="regime-desc" style="font-size:11px;line-height:1.5">-</div>
+      <div id="regime-desc" style="font-size:10px;line-height:1.35">-</div>
       <div id="regime-assets" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"></div>
     </div>
 
     <!-- 4국면 확률 막대그래프 -->
+    <div class="macro-grid">
     <div class="section">
       <div class="sec-head">4국면 확률 분포</div>
       <div id="regime-prob-bars"></div>
@@ -425,6 +470,7 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
     <div class="section">
       <div class="sec-head">다음 분기 전환 확률 <span style="color:var(--mu);font-weight:400">— P^3 전이행렬 (2001~2026)</span></div>
       <div id="next-quarter-bars"></div>
+    </div>
     </div>
 
     <!-- 시장시황보고서 보조 진단 -->
@@ -529,7 +575,7 @@ let currentTicker = '005930.KS';
 let currentPeriod = 'max';
 let currentCandle = '1d';
 let currentPanel  = 'robo';
-let currentFilter = 'all';
+let currentFilter = 's1m_lsv';
 let currentStrat  = 'ERC';
 let screenData    = null;
 let btData        = null;
@@ -557,7 +603,8 @@ let chartDragState = null;
 // 전략 백테스트 상태
 let stratBtData   = null;
 let sectorFactorData = null;   // 섹터·팩터 독립 백테스트 요약 (읽기 전용)
-let btStrategy    = 'quant_compare';
+let sectorFactorChartInst = null;
+let btStrategy    = 'all';
 let btTopN        = 5;
 let btRebal       = 'M';
 let eqChartInst   = null;
@@ -624,13 +671,23 @@ const kqCandlePlugin = {
 };
 Chart.register(kqCandlePlugin);
 
+const DISPLAY_NAME_QUALITY = '중형성장주';
+function qualityStrategyLabel(tier){ return `${tier} ${DISPLAY_NAME_QUALITY}`; }
+function applyDisplayNames(){
+  document.querySelectorAll('[data-quality-tier]').forEach(node=>{
+    node.textContent = qualityStrategyLabel(node.dataset.qualityTier || '');
+  });
+}
+
 // ─── 패널 전환 ─────────────────────────────────────────────────────────────
 function switchPanel(id, btn){
   currentPanel = id;
   document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.panel-content').forEach(p=>p.style.display='none');
   btn.classList.add('active');
-  show('panel-'+id);
+  const panel = el('panel-'+id);
+  const gridPanels = new Set(['stratbt','robo','bt','recommend']);
+  if(panel){ panel.style.display = gridPanels.has(id) ? 'grid' : 'block'; panel.classList.toggle('panel-grid', gridPanels.has(id)); }
   if(id==='screen' && !screenData) {} // 수동 실행
   if(id==='bt' && !btData) {}
   if(id==='stratbt' && !stratBtData) {} // 수동 실행
@@ -638,6 +695,16 @@ function switchPanel(id, btn){
   if(id==='macro' && !macroLoaded) loadMacro();
   if(id==='recommend' && !recommendData) loadRecommendPortfolio();
   if(id==='heatmap' && !heatmapData) loadReturnHeatmap();
+}
+function toggleChartExpand(){
+  const side = document.querySelector('.chart-side');
+  if(!side) return;
+  const expanded = side.classList.toggle('chart-expanded');
+  const btn = document.getElementById('chart-expand-btn');
+  if(btn) btn.textContent = expanded ? '차트 축소' : '차트 확대';
+  setTimeout(()=>{
+    try{ Object.values(Chart.instances || {}).forEach(c=>c?.resize?.()); }catch(_e){}
+  }, 80);
 }
 
 // ─── 종목 분석 ─────────────────────────────────────────────────────────────
@@ -1308,48 +1375,88 @@ function setFilter(f, btn){
 function renderScreener(){
   const d=screenData;
   const scrDateEl = document.getElementById('scr-date');
-  if(scrDateEl) scrDateEl.textContent = d.price_date ? `엑셀 데이터 마지막 종가 (${d.price_date})` : '엑셀 데이터 마지막 종가 날짜 확인 불가';
+  if(scrDateEl) scrDateEl.textContent = d.price_date ? `수정주가 패널 최신 종가 (${d.price_date})` : '수정주가 패널 기준일 확인 불가';
+  const metaList = d.screener_meta || [];
+  const meta = metaList.find(x=>x.key===currentFilter) || {
+    label: currentFilter, selection: '-', gate: '-', note: ''
+  };
+  const diag = d.screener_diagnostics || {};
+  const counts = diag.per_filter_count || {};
+  const isKang = currentFilter.includes('kang');
+  const mode = diag.kang_mode || 'unknown';
+  const top3Sectors = (diag.top3_sectors || []).map(x=>{
+    const r = Number.isFinite(Number(x.return_12m)) ? ` ${(Number(x.return_12m)*100).toFixed(1)}%` : '';
+    return `${x.ticker || ''}/${x.sector || ''}${r}`;
+  }).filter(Boolean).join(', ') || (diag.us_sector_error ? '계산 실패' : '없음');
+  const coverage = diag.fundamentals_coverage || {};
+  const coverageText = coverage.display ? `${coverage.display} (${(Number(coverage.ratio || 0)*100).toFixed(1)}%)` : '캐시 없음';
+  const warnText = (diag.warnings || []).join(' / ');
+  const modeBadge = isKang && mode==='fallback_roe'
+    ? `<div style="font-size:10px;color:#d29922;background:#2d2412;border:1px solid #6e5620;border-radius:4px;padding:6px 8px;margin-top:6px;line-height:1.45">
+        ⚠ 모드: fallback_roe — 정식 재무필드(영업현금흐름·순이익·총자산·영업이익) 부재. 시총하위50%+ROE 기준이며 백테스트의 중형성장주 선정과 다를 수 있습니다.
+      </div>`
+    : isKang && mode==='strict_yfinance'
+      ? `<div style="font-size:10px;color:var(--gr);margin-top:6px">모드: strict(yfinance) — 정식 재무필드 기준</div>`
+      : '';
   let rows=Object.entries(d.data);
 
-  if(currentFilter!=='all'){
-    const top=new Set(d.screeners[currentFilter]||[]);
-    rows=rows.filter(([t])=>top.has(t));
-    rows.sort((a,b)=>{
-      const al=[...d.screeners[currentFilter]].indexOf(a[0]);
-      const bl=[...d.screeners[currentFilter]].indexOf(b[0]);
-      return al-bl;
-    });
-  } else {
-    // 종합 득표 정렬
-    const vote={};
-    Object.values(d.screeners).forEach(tks=>tks.forEach(t=>{vote[t]=(vote[t]||0)+1;}));
-    rows.sort((a,b)=>(vote[b[0]]||0)-(vote[a[0]]||0));
-  }
+  const ranked = d.screeners[currentFilter] || [];
+  const top=new Set(ranked);
+  const rankMap={};
+  ranked.forEach((t,i)=>{rankMap[t]=i+1;});
+  rows=rows.filter(([t])=>top.has(t));
+  rows.sort((a,b)=>(rankMap[a[0]]||999)-(rankMap[b[0]]||999));
 
   const vote={};
   Object.values(d.screeners).forEach(tks=>tks.forEach(t=>{vote[t]=(vote[t]||0)+1;}));
 
-  let html=`<table class="screen-tbl"><tr>
-    <th>종목</th><th>현재가</th><th>등락</th><th>PER</th><th>PBR</th><th>ROE</th><th>모멘텀</th><th>내재성장률</th><th>S2</th><th>신호</th>
+  let html=`<div class="compact-note">
+    <b>${meta.label}</b> · ${meta.selection} · 위험회피: ${meta.gate} ${modeBadge}
+    <div style="margin-top:3px">${meta.note}</div>
+    <details class="kq-details" style="margin-bottom:0">
+      <summary>진단 상세 · 미국 섹터 ${diag.us_sectors_loaded ?? 0}개 · 상위3 ${top3Sectors}</summary>
+      <div style="margin-top:6px">
+        랭킹풀 ${diag.ranking_pool_count ?? '-'}개 / 전체 ${diag.universe_result_count ?? '-'}개 ·
+        섹터필터 ${diag.sector_filter_count ?? '-'}개 · 섹터매핑 ${diag.sector_mapped_count ?? '-'}개 ·
+        LSV PER/PBR 통과 ${counts.lsv_positive_pe_pbr ?? '-'}개 ·
+        중형성장주 strict ${counts.kang_strict_yfinance ?? counts.kang_strict_cashflow_income ?? '-'}개
+        → 하위50% ${counts.kang_small_cap_bucket ?? '-'}개 → 최종 ${counts.kang_final_selected ?? '-'}개 ·
+        fallback ${counts.kang_fallback_positive_roe ?? '-'}개 · 정식필드 커버리지 ${coverageText}
+        ${warnText ? `<br><span style="color:#d29922">${warnText}</span>` : ''}
+      </div>
+    </details>
+  </div>`;
+  if(!rows.length){
+    const reason = isKang && mode==='empty'
+      ? '중형성장주 후보 산출에 필요한 시총·수익성 필드가 부족합니다.'
+      : '이 전략 조건을 만족하는 현재 후보가 없습니다.';
+    el('scr-content').innerHTML = html + `<div class="loading-msg">${reason}</div>`;
+    return;
+  }
+
+  html+=`<table class="screen-tbl"><tr>
+    <th>순위</th><th>종목</th><th>섹터</th><th>현재가</th><th>등락</th><th>PER</th><th>PBR</th><th>ROE</th><th>시총</th><th>모멘텀</th><th>S2</th><th>신호</th>
   </tr>`;
   rows.forEach(([t,v])=>{
     const vc=vote[t]||0;
     const sigCls=v.signal==='매수'?'b-gr':v.signal==='매도'?'b-rd':'b-yl';
     const chgCol=v.chg>=0?'var(--gr)':'var(--rd)';
     html+=`<tr onclick="loadTicker('${t}')" title="클릭하여 차트 분석">
+      <td style="font-weight:700;color:var(--ac)">${rankMap[t]||'-'}</td>
       <td>
         <div style="font-weight:600">${v.name || t.replace('.KS','').replace('.KQ','')}</div>
         <div style="font-size:10px;color:var(--mu);margin-top:2px">${t.replace('.KS','').replace('.KQ','')}
           ${vc>=3?'<span class="badge b-pu" style="margin-left:4px">★'+vc+'</span>':''}
         </div>
       </td>
+      <td style="font-size:10px;color:var(--mu)">${v.sector || '-'}</td>
       <td>${fmt(v.cur)}</td>
       <td style="color:${chgCol}">${v.chg>=0?'+':''}${v.chg}%</td>
       <td>${v.pe?v.pe+'x':'-'}</td>
       <td>${v.pbr?v.pbr+'x':'-'}</td>
       <td>${v.roe?(v.roe*100).toFixed(1)+'%':'-'}</td>
+      <td>${v.mcap?(v.mcap/1e12).toFixed(1)+'조':'-'}</td>
       <td style="color:${(v.mom||0)>=0?'var(--gr)':'var(--rd)'}">${v.mom!=null?(v.mom*100).toFixed(1)+'%':'-'}</td>
-      <td title="역방향DCF: 현재가가 적정가라고 가정할 때 시장이 내재한 기대성장률(낮을수록 저평가 후보)">${v.dcf_g!=null?(v.dcf_g*100).toFixed(1)+'%':'-'}</td>
       <td style="color:${(v.s2_mom||0)>=0?'var(--gr)':'var(--rd)'}" title="S2 모멘텀: 최근 1개월을 제외한 12-1개월 수익률">${v.s2_mom!=null?(v.s2_mom*100).toFixed(1)+'%':'-'}</td>
       <td><span class="badge ${sigCls}">${v.signal}</span></td>
     </tr>`;
@@ -1501,9 +1608,11 @@ async function loadSectorFactor(){
       const bench = row.is_benchmark;
       const style = bench ? 'color:var(--mu);font-style:italic'
                   : hl ? 'font-weight:700;background:#16213a' : '';
+      const code = row.display_code || row.code;
+      const selection = row.display_selection || row.selection;
       return `<tr style="${style}">
-        <td style="text-align:left">${row.code}</td>
-        <td style="text-align:left">${row.selection}</td>
+        <td style="text-align:left">${code}</td>
+        <td style="text-align:left">${selection}</td>
         <td style="text-align:left">${row.gate}</td>
         <td>${row.cagr_pct==null?'-':row.cagr_pct.toFixed(2)}</td>
         <td>${row.mdd_pct==null?'-':row.mdd_pct.toFixed(2)}</td>
@@ -1512,18 +1621,62 @@ async function loadSectorFactor(){
         <td>${row.cost_ann_pct==null?'-':row.cost_ann_pct.toFixed(2)}</td>
       </tr>`;}).join('');
     box.innerHTML = `
-      <div style="font-size:11px;color:var(--mu);margin-bottom:8px;line-height:1.5">${d.position}</div>
+      <div class="compact-line" style="margin-bottom:6px">${d.position}</div>
       <div style="overflow-x:auto"><table class="heatmap-table" style="width:100%">
         <thead><tr><th>전략</th><th>종목선정</th><th>위험회피 게이트</th>
         <th>CAGR%</th><th>MDD%</th><th>Sharpe</th><th>Calmar</th><th>연환산비용%</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
-      <div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.5">게이트 정의: ${d.gates}</div>
-      <div style="font-size:11px;color:var(--tx);background:#16213a;border:1px solid var(--bd);border-radius:4px;padding:8px 10px;margin-top:8px;line-height:1.55">
-        <b>후속 검증 후보 (수치 미채택)</b><br>${d.candidate}</div>
-      <div style="font-size:10px;color:var(--mu);margin-top:6px;font-style:italic">원칙: ${d.principle}</div>`;
+      <details class="kq-details">
+        <summary>게이트 정의 · 후속 후보 · 원칙</summary>
+        <div style="margin-top:6px;line-height:1.45">게이트 정의: ${d.gates}</div>
+        <div style="margin-top:6px;color:var(--tx)"><b>후속 검증 후보 (수치 미채택)</b><br>${d.candidate}</div>
+        <div style="margin-top:6px;font-style:italic">원칙: ${d.principle}</div>
+      </details>
+      ${d.sample_curve ? `
+      <div class="sf-card">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-end;margin-bottom:6px">
+          <div style="font-weight:700">${d.sample_curve.title}</div>
+          <div style="font-size:10px;color:var(--mu)">초기 NAV=100</div>
+        </div>
+        <div style="height:180px"><canvas id="ch-sector-factor"></canvas></div>
+        <div style="font-size:10px;color:var(--mu);margin-top:6px;line-height:1.45">${d.sample_curve.note}<br>출처: ${d.sample_curve.source}</div>
+      </div>` : ''}`;
+    if(d.sample_curve) setTimeout(()=>renderSectorFactorCurve(d.sample_curve), 30);
   }catch(e){
     box.innerHTML = `<div class="loading-msg">섹터·팩터 요약을 불러올 수 없습니다: ${e.message}</div>`;
   }
+}
+
+function renderSectorFactorCurve(curve){
+  const canvas = el('ch-sector-factor');
+  if(sectorFactorChartInst){ sectorFactorChartInst.destroy(); sectorFactorChartInst=null; }
+  if(!canvas || !curve || !curve.dates || !curve.nav || curve.dates.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  sectorFactorChartInst = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels:curve.dates,
+      datasets:[{
+        label:'NAV',
+        data:curve.nav,
+        borderColor:'#3fb950',
+        backgroundColor:'rgba(63,185,80,.12)',
+        fill:true,
+        tension:.25,
+        pointRadius:0,
+        borderWidth:2
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#8b949e',maxTicksLimit:6},grid:{color:'#21262d'}},
+        y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}}
+      }
+    }
+  });
 }
 
 async function loadStratBt(){
@@ -1542,13 +1695,22 @@ async function loadStratBt(){
 }
 
 function stratBtLabel(strategy){
-  if(strategy==='quant_compare') return '로보필터 비교';
-  if(strategy==='quant') return '퀀트(모멘텀)';
-  if(strategy==='quant_s2') return '퀀트(S2모멘텀)';
-  if(strategy==='robo') return '로보신호';
-  if(strategy==='quant_robo_filter') return '퀀트+로보필터';
-  if(strategy==='quant_s2_robo_filter') return 'S2+로보필터';
+  if(strategy==='all') return '전체 비교';
+  if(strategy==='s1m_lsv') return 'M1 LSV';
+  if(strategy==='s2m_lsv') return 'M2 LSV';
+  if(strategy==='s3m_lsv') return 'M3 LSV';
+  if(strategy==='s1m_kang') return qualityStrategyLabel('M1');
+  if(strategy==='s2m_kang') return qualityStrategyLabel('M2');
+  if(strategy==='s3m_kang') return qualityStrategyLabel('M3');
   return strategy || '전략';
+}
+
+function stratBtColor(strategy){
+  return {
+    s1m_lsv:'#7bb5ff', s2m_lsv:'#388bfd', s3m_lsv:'#1f6feb',
+    s1m_kang:'#8be9a0', s2m_kang:'#3fb950', s3m_kang:'#238636',
+    all:'var(--bl)'
+  }[strategy] || '#8b949e';
 }
 
 function alignCurve(dates, values, labels){
@@ -1567,11 +1729,16 @@ function renderStratBt(){
   const riskFreeRate = d.risk_free_rate ?? d.assumptions?.risk_free_rate ?? 0.035;
   const isNetReturns = (d.returns_basis || '').includes('net') || Object.keys(costs).length>0;
   const stratName=stratBtLabel(d.strategy);
-  const compareRuns=d.comparison_runs||[];
-  const compareBench=d.comparison_benchmark||null;
+  const compareRuns=(d.compare && Array.isArray(d.runs))
+    ? d.runs.map(run=>({label:run.strategy_label || stratBtLabel(run.strategy), color:run.color || stratBtColor(run.strategy), data:run}))
+    : [];
+  const compareBench=(d.compare && d.benchmark)
+    ? {label:d.benchmark_label || 'KODEX200', metrics:d.bench_metrics || {}, dates:d.benchmark_dates || [], equity:d.benchmark || [], color:'#8b949e'}
+    : null;
   const isCompare=compareRuns.length>0;
+  const benchLabel=d.benchmark_label || 'KODEX200';
 
-  // 성과 비교 카드 (전략 vs KOSPI)
+  // 성과 비교 카드 (전략 vs KODEX200)
   function metricRow(label, sv, bv, unit='%', good='high'){
     const better = good==='high' ? sv>bv : sv<bv;
     const col = better?'var(--gr)':'var(--rd)';
@@ -1598,7 +1765,7 @@ function renderStratBt(){
     if(compareBench?.metrics){
       const bt = compareBench.metrics.total_return;
       summaryCards += `<div class="metric-card" style="flex:1;text-align:center;min-width:120px">
-        <div class="metric-label">${compareBench.label || 'KOSPI'} 누적</div>
+        <div class="metric-label">${compareBench.label || 'KODEX200'} 누적</div>
         <div class="metric-val" style="color:var(--mu);font-size:18px">${bt ?? '-'}%</div>
       </div>`;
     }
@@ -1614,115 +1781,90 @@ function renderStratBt(){
       </div>`;
   }
 
+  if(isCompare){
+    const bestRun = compareRuns.find(run=>run.data?.strategy===d.best_strategy) || compareRuns[0];
+    const bestMetrics = bestRun?.data?.metrics || {};
+    const bmMetrics = compareBench?.metrics || {};
+    summaryCards = `<div class="stat-strip" style="width:100%">
+      <div class="stat-chip good"><b>${bestRun?.label || '-'}</b><span>Best Calmar</span></div>
+      <div class="stat-chip muted"><b>${bestMetrics.calmar ?? '-'}</b><span>Calmar</span></div>
+      <div class="stat-chip ${(bestMetrics.cagr||0)>=0?'good':'bad'}"><b>${bestMetrics.cagr ?? '-'}%</b><span>Best CAGR</span></div>
+      <div class="stat-chip muted"><b>${bmMetrics.cagr ?? '-'}%</b><span>${benchLabel} CAGR</span></div>
+      <div class="stat-chip muted"><b>${compareRuns.length}+1</b><span>strategies</span></div>
+    </div>`;
+  } else {
+    const totalClass = (m.total_return||0)>=0 ? 'good' : 'bad';
+    const cagrClass = (m.cagr||0)>=0 ? 'good' : 'bad';
+    const mddClass = (m.mdd||0)>=0 ? 'good' : 'bad';
+    const benchTotal = bm.total_return ?? null;
+    const benchClass = (benchTotal||0)>=0 ? 'good' : 'bad';
+    summaryCards = `<div class="stat-strip" style="width:100%">
+      <div class="stat-chip ${totalClass}"><b>${m.total_return??'-'}%</b><span>${stratName} total</span></div>
+      <div class="stat-chip ${cagrClass}"><b>${m.cagr??'-'}%</b><span>CAGR</span></div>
+      <div class="stat-chip ${mddClass}"><b>${m.mdd??'-'}%</b><span>MDD</span></div>
+      <div class="stat-chip muted"><b>${m.sharpe??'-'}</b><span>Sharpe</span></div>
+      <div class="stat-chip ${benchClass}"><b>${benchTotal??'-'}%</b><span>${benchLabel}</span></div>
+    </div>`;
+  }
   let html=`
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${summaryCards}</div>
 
-    <div class="sec-head" style="margin-top:4px">📈 Equity Curve (${isCompare?'로보필터 ON/OFF + KOSPI':'전략 vs KOSPI'})</div>
-    <div class="chart-sm" style="height:170px"><canvas id="eq-chart"></canvas></div>
+    ${d.universe_note ? `<div style="font-size:11px;color:var(--mu);border:1px solid var(--bd);background:#161b22;border-radius:4px;padding:7px 9px;margin-bottom:8px;line-height:1.45">${d.universe_note}</div>` : ''}
+
+    <div class="sec-head" style="margin-top:4px">📈 Equity Curve (전략 vs ${benchLabel})</div>
+    <div class="chart-sm" style="height:220px"><canvas id="eq-chart"></canvas></div>
 
     <div class="sec-head">📉 언더워터 차트 (낙폭)</div>
-    <div class="chart-sm" style="height:90px"><canvas id="uw-chart"></canvas></div>
+    <div class="chart-sm chart-aux" style="height:120px"><canvas id="uw-chart"></canvas></div>
   `;
 
   // 성과지표 비교 테이블
   if(isCompare){
-    const metricSpecs = [
-      ['누적수익률','total_return','%'],
-      ['CAGR','cagr','%'],
-      ['변동성','vol','%'],
-      ['Sharpe','sharpe',''],
-      ['최대낙폭(MDD)','mdd','%'],
-      ['Calmar','calmar',''],
-      ['승률','win_rate','%'],
-    ];
-    function compareMetricRow(label, key, unit='%'){
-      const cells = compareRuns.map(run=>{
-        const val = run.data?.metrics?.[key];
-        return `<td style="text-align:right;font-weight:700;color:${run.color || 'var(--bl)'}">${val??'-'}${unit}</td>`;
-      }).join('');
-      const benchVal = compareBench?.metrics?.[key];
-      const benchCell = compareBench ? `<td style="text-align:right;color:var(--mu)">${benchVal??'-'}${unit}</td>` : '';
-      return `<tr><td style="color:var(--mu)">${label}</td>${cells}${benchCell}</tr>`;
-    }
-    const headerCells = compareRuns.map(run=>
-      `<th style="text-align:right;color:${run.color || 'var(--bl)'};font-size:10px">${run.label}</th>`
-    ).join('');
-    const benchHeader = compareBench ? `<th style="text-align:right;color:var(--mu);font-size:10px">${compareBench.label || 'KOSPI'}</th>` : '';
+    const bestStrategy = d.best_strategy;
+    const rowHtml = compareRuns.map(run=>{
+      const rm = run.data?.metrics || {};
+      const turn = run.data?.costs?.total_turnover;
+      const isBest = run.data?.strategy === bestStrategy;
+      const bg = isBest ? 'background:#16213a;font-weight:700' : '';
+      const calmarColor = isBest ? 'var(--gr)' : (run.color || 'var(--tx)');
+      return `<tr style="${bg}">
+        <td style="text-align:left;color:${run.color || 'var(--tx)'}">${isBest?'★ ':''}${run.label}</td>
+        <td style="text-align:right">${rm.cagr??'-'}%</td>
+        <td style="text-align:right;color:${(rm.mdd||0)>=0?'var(--gr)':'var(--rd)'}">${rm.mdd??'-'}%</td>
+        <td style="text-align:right">${rm.sharpe??'-'}</td>
+        <td style="text-align:right;color:${calmarColor}">${rm.calmar??'-'}</td>
+        <td style="text-align:right">${turn==null?'-':fmt(turn,2)+'x'}</td>
+      </tr>`;
+    }).join('');
+    const br = compareBench?.metrics || {};
+    const benchRow = compareBench ? `<tr style="color:var(--mu);font-style:italic">
+      <td style="text-align:left">${compareBench.label || benchLabel}</td>
+      <td style="text-align:right">${br.cagr??'-'}%</td>
+      <td style="text-align:right">${br.mdd??'-'}%</td>
+      <td style="text-align:right">${br.sharpe??'-'}</td>
+      <td style="text-align:right">${br.calmar??'-'}</td>
+      <td style="text-align:right">-</td>
+    </tr>` : '';
     html+=`
-    <div class="sec-head">성과지표 비교</div>
+    <div class="sec-head">통합 성과표 <span style="color:var(--mu);font-weight:400">— 최고 Calmar 행 강조</span></div>
     <table class="sig-table" style="font-size:11px">
-      <tr><th style="text-align:left;color:var(--mu);font-size:10px">지표</th>
-          ${headerCells}${benchHeader}</tr>
-      ${metricSpecs.map(([label,key,unit])=>compareMetricRow(label,key,unit)).join('')}
+      <tr><th style="text-align:left;color:var(--mu);font-size:10px">전략</th>
+          <th style="text-align:right;color:var(--mu);font-size:10px">CAGR</th>
+          <th style="text-align:right;color:var(--mu);font-size:10px">MDD</th>
+          <th style="text-align:right;color:var(--mu);font-size:10px">Sharpe</th>
+          <th style="text-align:right;color:var(--mu);font-size:10px">Calmar</th>
+          <th style="text-align:right;color:var(--mu);font-size:10px">회전율</th></tr>
+      ${rowHtml}${benchRow}
     </table>
-    <div style="color:var(--mu);font-size:10px;margin-top:6px;line-height:1.5">
-      OFF는 순수 퀀트 랭킹, ON은 같은 랭킹 후보에서 로보 약세 종목을 제외하고 차순위 후보로 보충한 결과입니다.
-      로보신호는 단독 운용 권고가 아니라 RSI/MACD/이동평균과 Alpha Decay 품질관리를 이용한 필터 기여도로 검증합니다.
-      S2는 12-1개월 룩백 때문에 초기 워밍업 구간 이후부터 리밸런싱됩니다.
-    </div>`;
-    if(d.overlay_report?.reports?.length){
-      const reportRows = d.overlay_report.reports.map(rep=>{
-        const rowMap = {};
-        (rep.rows || []).forEach(row=>{ rowMap[row.metric] = row; });
-        const cagr = rowMap['CAGR']?.delta;
-        const mdd = rowMap['MDD']?.delta;
-        const sharpe = rowMap['Sharpe']?.delta;
-        const turn = rowMap['총 회전율']?.delta;
-        const audit = rep.filter_audit || {};
-        const spread = audit.avg_spread;
-        const hit = audit.hit_rate;
-        const hitP = audit.hit_p_value;
-        const spreadP = audit.avg_spread_p_value;
-        const periodText = audit.periods_tested ? `${audit.positive_periods}/${audit.periods_tested}` : '-';
-        const verdict = (spread == null || hit == null) ? {label:'보류', color:'var(--mu)'}
-                      : (spread > 0 && hit >= 50) ? {label:'적용 후보', color:'var(--gr)'}
-                      : {label:'미적용', color:'var(--rd)'};
-        return `<tr>
-          <td style="color:var(--mu)">${rep.label}</td>
-          <td style="text-align:right;color:${(cagr||0)>=0?'var(--gr)':'var(--rd)'}">${cagr==null?'-':(cagr>=0?'+':'')+cagr.toFixed(2)+'%p'}</td>
-          <td style="text-align:right;color:${(mdd||0)>=0?'var(--gr)':'var(--rd)'}">${mdd==null?'-':(mdd>=0?'+':'')+mdd.toFixed(2)+'%p'}</td>
-          <td style="text-align:right;color:${(sharpe||0)>=0?'var(--gr)':'var(--rd)'}">${sharpe==null?'-':(sharpe>=0?'+':'')+sharpe.toFixed(3)}</td>
-          <td style="text-align:right;color:${(turn||0)<=0?'var(--gr)':'var(--yl)'}">${turn==null?'-':(turn>=0?'+':'')+turn.toFixed(2)+'x'}</td>
-          <td style="text-align:right">${audit.n_events??'-'}</td>
-          <td style="text-align:right;color:${(spread||0)>=0?'var(--gr)':'var(--rd)'}">${spread==null?'-':(spread>=0?'+':'')+spread.toFixed(2)+'%p'}</td>
-          <td style="text-align:right;color:${(hit||0)>=50?'var(--gr)':'var(--rd)'}">${hit==null?'-':hit.toFixed(1)+'%'}</td>
-          <td style="text-align:right;color:${hitP!=null && hitP<0.05?'var(--gr)':'var(--mu)'}">${hitP==null?'-':'p='+hitP.toFixed(3)}</td>
-          <td style="text-align:right;color:${spreadP!=null && spreadP<0.05?'var(--gr)':'var(--mu)'}">${spreadP==null?'-':'p='+spreadP.toFixed(3)}</td>
-          <td style="text-align:right">${periodText}</td>
-          <td style="text-align:right;color:${verdict.color};font-weight:700">${verdict.label}</td>
-        </tr>`;
-      }).join('');
-      html+=`
-      <div class="sec-head" style="margin-top:10px">로보 필터 기여도·제외 감사 (ON - OFF)</div>
-      <table class="sig-table" style="font-size:11px">
-        <tr><th style="text-align:left;color:var(--mu);font-size:10px">기준 전략</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">CAGR</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">MDD</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">Sharpe</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">회전율</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">이벤트</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">대체-제외</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">Hit</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">Hit p</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">격차 p</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">구간+</th>
-            <th style="text-align:right;color:var(--mu);font-size:10px">판정</th></tr>
-        ${reportRows}
-      </table>
-      <div style="color:var(--mu);font-size:10px;margin-top:5px;line-height:1.5">
-        ${d.overlay_report.description || ''}<br>
-        대체-제외는 로보필터가 제외한 종목과 대신 편입한 종목의 다음 리밸런싱 구간 평균수익률 차이입니다.<br>
-        Hit p는 이벤트 단위 Hit&gt;50% 이항검정, 격차 p는 이벤트별 대체-제외 평균이 0보다 다른지 보는 t-test입니다.<br>
-        필터는 기여 증거가 있을 때만 적용하고, 증거가 없거나 방향이 음수면 기본값인 미적용을 유지합니다.
-      </div>`;
-    }
-  } else if(hasBench){
+    <div class="compact-line" style="margin-top:5px">
+      앱 유니버스 기준 근사 — 정본 수치는 검증 엔진(backtest-ksj, 시총 300·FnGuide 섹터·시점 재무) 결과이며 요약 카드에 게시합니다.
+    </div>`;  } else if(hasBench){
     html+=`
     <div class="sec-head">성과지표 비교</div>
     <table class="sig-table" style="font-size:11px">
       <tr><th style="text-align:left;color:var(--mu);font-size:10px">지표</th>
           <th style="text-align:right;color:var(--bl);font-size:10px">${stratName}</th>
-          <th style="text-align:right;color:var(--mu);font-size:10px">KOSPI</th></tr>
+          <th style="text-align:right;color:var(--mu);font-size:10px">${benchLabel}</th></tr>
       ${metricRow('누적수익률', m.total_return, bm.total_return)}
       ${metricRow('CAGR', m.cagr, bm.cagr)}
       ${metricRow('변동성', m.vol, bm.vol, '%', 'low')}
@@ -1757,7 +1899,7 @@ function renderStratBt(){
       </tr>`;
     }).join('');
     html+=`
-    <div class="sec-head" style="margin-top:10px">KOSPI 대비 분석</div>
+    <div class="sec-head" style="margin-top:10px">${benchLabel} 대비 분석</div>
     <table class="sig-table" style="font-size:11px">
       <tr><th style="text-align:left;color:var(--mu);font-size:10px">전략</th>
           <th style="text-align:right;color:var(--mu);font-size:10px">초과수익</th>
@@ -1768,7 +1910,7 @@ function renderStratBt(){
     </table>`;
   } else if(Object.keys(ex).length){
     html+=`
-    <div class="sec-head" style="margin-top:10px">KOSPI 대비 분석</div>
+    <div class="sec-head" style="margin-top:10px">${benchLabel} 대비 분석</div>
     <div class="metrics-grid">
       <div class="metric-card"><div class="metric-label">초과수익</div>
         <div class="metric-val" style="color:${(ex.excess_return||0)>=0?'var(--gr)':'var(--rd)'}">${ex.excess_return>=0?'+':''}${ex.excess_return}%p</div></div>
@@ -1782,16 +1924,19 @@ function renderStratBt(){
   }
 
   if(Object.keys(costs).length){
+    const costLine = `비용 ${costs.transaction_cost_bps??0}bps + 슬리피지 ${costs.slippage_bps??0}bps · 회전율 ${fmt(costs.total_turnover,2)}x · 누적 비용 ${fmt((costs.total_cost_rate||0)*100,2)}% · ${isNetReturns?'net 기준':'gross 기준'}`;
     html+=`
-    <div class="sec-head" style="margin-top:10px">거래비용 가정</div>
-    <div class="metrics-grid">
-      <div class="metric-card"><div class="metric-label">거래비용</div><div class="metric-val" style="font-size:13px">${costs.transaction_cost_bps??0}bps</div></div>
-      <div class="metric-card"><div class="metric-label">슬리피지</div><div class="metric-val" style="font-size:13px">${costs.slippage_bps??0}bps</div></div>
-      <div class="metric-card"><div class="metric-label">무위험수익률</div><div class="metric-val" style="font-size:13px">${fmt(riskFreeRate*100,1)}%/년</div></div>
-      <div class="metric-card"><div class="metric-label">총 회전율</div><div class="metric-val" style="font-size:13px">${fmt(costs.total_turnover,2)}x</div></div>
-      <div class="metric-card"><div class="metric-label">누적 비용</div><div class="metric-val" style="font-size:13px">${fmt((costs.total_cost_rate||0)*100,2)}%</div></div>
-      <div class="metric-card"><div class="metric-label">수익률 기준</div><div class="metric-val" style="font-size:13px">${isNetReturns?'비용 차감 후(net)':'비용 차감 전(gross)'}</div></div>
-    </div>`;
+    <details class="kq-details">
+      <summary>${costLine}</summary>
+      <div class="metrics-grid" style="margin-top:6px">
+        <div class="metric-card"><div class="metric-label">거래비용</div><div class="metric-val" style="font-size:13px">${costs.transaction_cost_bps??0}bps</div></div>
+        <div class="metric-card"><div class="metric-label">슬리피지</div><div class="metric-val" style="font-size:13px">${costs.slippage_bps??0}bps</div></div>
+        <div class="metric-card"><div class="metric-label">무위험수익률</div><div class="metric-val" style="font-size:13px">${fmt(riskFreeRate*100,1)}%/년</div></div>
+        <div class="metric-card"><div class="metric-label">총 회전율</div><div class="metric-val" style="font-size:13px">${fmt(costs.total_turnover,2)}x</div></div>
+        <div class="metric-card"><div class="metric-label">누적 비용</div><div class="metric-val" style="font-size:13px">${fmt((costs.total_cost_rate||0)*100,2)}%</div></div>
+        <div class="metric-card"><div class="metric-label">수익률 기준</div><div class="metric-val" style="font-size:13px">${isNetReturns?'비용 차감 후(net)':'비용 차감 전(gross)'}</div></div>
+      </div>
+    </details>`;
   }
 
   // 최근 보유 종목
@@ -1821,6 +1966,21 @@ function renderStratBt(){
       </div>`;
   }
 
+  if(isCompare){
+    const tableStart = html.indexOf('<div class="sec-head">통합 성과표');
+    const chartStart = html.indexOf('<div class="sec-head" style="margin-top:4px">');
+    if(tableStart > -1 && chartStart > -1 && tableStart > chartStart){
+      const tableEnd = html.indexOf('</table>', tableStart);
+      if(tableEnd > -1){
+        const blockEnd = tableEnd + '</table>'.length;
+        const tableBlock = html.slice(tableStart, blockEnd);
+        html = html.slice(0, tableStart) + html.slice(blockEnd);
+        const newChartStart = html.indexOf('<div class="sec-head" style="margin-top:4px">');
+        html = html.slice(0, newChartStart) + tableBlock + html.slice(newChartStart);
+      }
+    }
+  }
+
   el('stratbt-content').innerHTML=html;
 
   // ── Equity Curve 차트 ──
@@ -1846,7 +2006,7 @@ function renderStratBt(){
           fill:i===0,
         }));
         if(compareBench?.equity?.length){
-          ds.push({label:compareBench.label||'KOSPI',
+          ds.push({label:compareBench.label||'KODEX200',
                    data:alignCurve(compareBench.dates||[], compareBench.equity||[], labels),
                    borderColor:compareBench.color||'#8b949e',
                    backgroundColor:'transparent',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:.2});
@@ -1855,7 +2015,7 @@ function renderStratBt(){
         ds=[{label:stratName,data:d.equity,borderColor:'#388bfd',
                    backgroundColor:'rgba(56,139,253,.08)',borderWidth:2,pointRadius:0,tension:.2,fill:true}];
         if(d.benchmark && d.benchmark.length)
-          ds.push({label:'KOSPI',data:d.benchmark,borderColor:'#8b949e',
+          ds.push({label:(d.benchmark_label||'KODEX200'),data:d.benchmark,borderColor:'#8b949e',
                    backgroundColor:'transparent',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:.2});
       }
       eqChartInst=new Chart(eqCtx,{type:'line',
@@ -2698,11 +2858,17 @@ function renderRegimeFallback(d){
 // ─── 초기 로드 ────────────────────────────────────────────────────────────
 window.addEventListener('load', ()=>{
   // 1초 후 삼성전자 기본 분석
+  applyDisplayNames();
   setTimeout(()=>analyzeStock(), 500);
 });
 </script>
 </body>
 </html>
+
+
+
+
+
 
 
 

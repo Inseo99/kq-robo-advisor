@@ -22,10 +22,10 @@ def test_parse_stock_params_trims_ticker_and_defaults_period() -> None:
 
 def test_parse_strategy_backtest_params_includes_trading_frictions() -> None:
     params = parse_strategy_backtest_params(
-        {"s": ["robo"], "n": ["7"], "r": ["Q"], "p": ["5y"], "tc": ["10"], "slip": ["5"]}
+        {"s": ["s2m_lsv"], "n": ["7"], "r": ["Q"], "p": ["5y"], "tc": ["10"], "slip": ["5"]}
     )
 
-    assert params.strategy == "robo"
+    assert params.strategy == "s2m_lsv"
     assert params.top_n == 7
     assert params.rebalance == "Q"
     assert params.period == "5y"
@@ -36,7 +36,7 @@ def test_parse_strategy_backtest_params_includes_trading_frictions() -> None:
 def test_parse_strategy_backtest_params_defaults_to_standard_trading_costs() -> None:
     params = parse_strategy_backtest_params({})
 
-    assert params.strategy == "quant"
+    assert params.strategy == "s1m_lsv"
     assert params.top_n == 5
     assert params.rebalance == "M"
     assert params.period == "3y"

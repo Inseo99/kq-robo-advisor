@@ -1,0 +1,33 @@
+From a306c2a1d97deae9dfa20590c5aad2ec7dcf7dc5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 10 Jul 2026 19:43:54 +0000
+Subject: [PATCH] =?UTF-8?q?Methods=20=C2=A74=20=EC=8B=9C=EB=8F=84=20?=
+ =?UTF-8?q?=EC=B9=B4=EC=9A=B4=ED=8A=B8=20=EC=A0=95=ED=95=A9:=207=ED=9A=8C(?=
+ =?UTF-8?q?J1=EA=B9=8C=EC=A7=80)=20=E2=86=92=208=ED=9A=8C(J1~J2)=20?=
+ =?UTF-8?q?=E2=80=94=20J2=20=ED=99=95=EC=A0=95=20=EB=B0=98=EC=98=81,=20?=
+ =?UTF-8?q?=EC=8B=A4=ED=97=98=EB=A1=9C=EA=B7=B8=EC=99=80=20=EC=9D=BC?=
+ =?UTF-8?q?=EC=B9=98?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ "docs/METHODS_\354\264\210\354\225\210.md" | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git "a/docs/METHODS_\354\264\210\354\225\210.md" "b/docs/METHODS_\354\264\210\354\225\210.md"
+index 3917b64..e6ecc18 100644
+--- "a/docs/METHODS_\354\264\210\354\225\210.md"
++++ "b/docs/METHODS_\354\264\210\354\225\210.md"
+@@ -40,7 +40,7 @@ CPI는 1개월, GDP는 속보·수정을 반영해 2개월의 보수적 lag를 
+ (위기 앵커 6종 유지 / 창 일치율 하한 / 전환 수 상·하한 / 3개월 이하 구간 상한),
+ 기각 조건. 후보별 시도는 1회로 제한하고 총 시도 횟수를 기록한다(다중 시도 통제).
+ 설계 단계에서 입력 데이터를 열람한 경우 그 사실을 스크립트 헤더에 남긴다. 본 연구에서
+-실행된 시도는 7회(N1~N8, J1)이며 실행 전 설계 폐기 2건을 포함해 전 이력이
++실행된 시도는 8회(N1~N8, J1~J2)이며 실행 전 설계 폐기 2건을 포함해 전 이력이
+ regime_next_실험로그.md에 기록되어 있다.
+ 
+ 라벨 규칙 외의 보조 가설(판정 로직 개선, 예측 특징 추가 등)도 동일한 프로토콜로
+-- 
+2.43.0
+

@@ -8,8 +8,6 @@ from kq_tool.api.dispatcher import (
     handle_dispatched_get_safely,
     handle_legacy_get,
 )
-from kq_tool.backtest.strategy_meta import QUANT_COMPARE
-
 
 def _services():
     return {
@@ -56,10 +54,10 @@ def test_dispatch_health_route() -> None:
 
 
 def test_dispatch_strategy_backtest_parses_cost_types() -> None:
-    response = dispatch_get("/api/stratbt?s=robo&n=7&r=Q&p=5y&tc=10&slip=5", _services())
+    response = dispatch_get("/api/stratbt?s=s1m_lsv&n=7&r=Q&p=5y&tc=10&slip=5", _services())
 
     assert response.payload == {
-        "strategy": "robo",
+        "strategy": "s1m_lsv",
         "top_n": 7,
         "rebalance": "Q",
         "period": "5y",
@@ -68,11 +66,11 @@ def test_dispatch_strategy_backtest_parses_cost_types() -> None:
     }
 
 
-def test_dispatch_strategy_backtest_accepts_quant_compare() -> None:
-    response = dispatch_get("/api/stratbt?s=quant_compare&n=3&r=Q&p=12y&tc=10&slip=5", _services())
+def test_dispatch_strategy_backtest_accepts_sector_factor_key() -> None:
+    response = dispatch_get("/api/stratbt?s=s3m_kang&n=3&r=Q&p=12y&tc=10&slip=5", _services())
 
     assert response.payload == {
-        "strategy": QUANT_COMPARE.key,
+        "strategy": "s3m_kang",
         "top_n": 3,
         "rebalance": "Q",
         "period": "12y",
@@ -215,7 +213,7 @@ def test_handle_legacy_get_routes_file_json_actions_and_not_found() -> None:
 
     assert handle_legacy_get("/", **common_callbacks) == "file"
     assert handle_legacy_get("/api/stock?t=005930.KS", **common_callbacks) == "stock"
-    assert handle_legacy_get("/api/stratbt?s=quant", **common_callbacks) == "stratbt"
+    assert handle_legacy_get("/api/stratbt?s=s1m_lsv", **common_callbacks) == "stratbt"
     assert handle_legacy_get("/api/macro", **common_callbacks) == "macro"
     assert handle_legacy_get("/api/health", **common_callbacks) == "health"
     assert handle_legacy_get("/api/ping", **common_callbacks) == "ping"
@@ -224,7 +222,7 @@ def test_handle_legacy_get_routes_file_json_actions_and_not_found() -> None:
     assert calls == [
         ("file", "index.html", "text/html; charset=utf-8"),
         ("stock", "005930.KS", None),
-        ("stratbt", "quant", None),
+        ("stratbt", "s1m_lsv", None),
         ("json", {"macro": True}, 200),
         ("json", {"health": True}, 200),
         ("json", {"ok": True}, 200),

@@ -1,8 +1,6 @@
 ﻿from __future__ import annotations
 
 from kq_tool.api.routes import build_get_response
-from kq_tool.backtest.strategy_meta import QUANT_COMPARE
-
 
 def _make_response(kind, payload, code=200, content_type=None):
     return {
@@ -61,13 +59,13 @@ def test_build_get_response_parses_stock_query() -> None:
 
 def test_build_get_response_parses_strategy_backtest_costs() -> None:
     response = build_get_response(
-        "/api/stratbt?s=quant_compare&n=3&r=Q&p=12y&tc=10&slip=5",
+        "/api/stratbt?s=s2m_lsv&n=3&r=Q&p=12y&tc=10&slip=5",
         _services(),
         make_response=_make_response,
     )
 
     assert response["payload"] == {
-        "strategy": QUANT_COMPARE.key,
+        "strategy": "s2m_lsv",
         "top_n": 3,
         "rebalance": "Q",
         "period": "12y",

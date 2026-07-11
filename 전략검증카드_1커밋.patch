@@ -1,0 +1,269 @@
+From 477659a5fe4d6c2e9773dbf7381d7d8a950739cd Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 10 Jul 2026 20:53:43 +0000
+Subject: [PATCH] =?UTF-8?q?=EC=A0=84=EB=9E=B5=EA=B2=80=EC=A6=9D=20?=
+ =?UTF-8?q?=ED=83=AD=EC=97=90=20=EC=84=B9=ED=84=B0=C2=B7=ED=8C=A9=ED=84=B0?=
+ =?UTF-8?q?=20=EB=8F=85=EB=A6=BD=20=EB=B0=B1=ED=85=8C=EC=8A=A4=ED=8A=B8=20?=
+ =?UTF-8?q?=EC=9A=94=EC=95=BD=20=EC=B9=B4=EB=93=9C=20=EC=B6=94=EA=B0=80=20?=
+ =?UTF-8?q?(=EC=9D=BD=EA=B8=B0=20=EC=A0=84=EC=9A=A9)=20=E2=80=94=206?=
+ =?UTF-8?q?=EC=A0=84=EB=9E=B5+=EB=B2=A4=EC=B9=98=EB=A7=88=ED=81=AC=20?=
+ =?UTF-8?q?=ED=91=9C,=20=EC=9C=84=ED=97=98=ED=9A=8C=ED=94=BC=20=EA=B2=8C?=
+ =?UTF-8?q?=EC=9D=B4=ED=8A=B8=20=EB=AA=85=EB=AA=85,=20=ED=9B=84=EC=86=8D?=
+ =?UTF-8?q?=20=EA=B2=80=EC=A6=9D=20=ED=9B=84=EB=B3=B4=20=EB=AC=B8=EA=B5=AC?=
+ =?UTF-8?q?,=20=EC=B6=94=EC=B2=9C=20=EC=97=94=EC=A7=84=20=EB=AF=B8?=
+ =?UTF-8?q?=EB=B0=98=EC=98=81=20=EB=AA=85=EC=8B=9C?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../sector_factor_backtest.csv                |  8 +++
+ index.html                                    | 47 +++++++++++++
+ server.py                                     | 12 ++++
+ src/kq_tool/api/routes/get.py                 |  2 +
+ src/kq_tool/api/services.py                   |  3 +
+ src/kq_tool/backtest/sector_factor_summary.py | 69 +++++++++++++++++++
+ 6 files changed, 141 insertions(+)
+ create mode 100644 data/strategy_validation/sector_factor_backtest.csv
+ create mode 100644 src/kq_tool/backtest/sector_factor_summary.py
+
+diff --git a/data/strategy_validation/sector_factor_backtest.csv b/data/strategy_validation/sector_factor_backtest.csv
+new file mode 100644
+index 0000000..1575623
+--- /dev/null
++++ b/data/strategy_validation/sector_factor_backtest.csv
+@@ -0,0 +1,8 @@
++code,selection,gate,cagr_pct,mdd_pct,sharpe,calmar,trades,cost_total_pct,cost_ann_pct
++s1m_lsv,Fama-LSV 저평가,없음(상시 투자),20.63,-24.90,0.89,0.83,708,14.40,1.94
++s2m_lsv,Fama-LSV 저평가,t1(미국 신호),11.39,-18.60,0.64,0.61,702,16.94,2.28
++s3m_lsv,Fama-LSV 저평가,t2(추세),11.71,-23.03,0.61,0.51,541,13.31,1.79
++s1m_kang,Kang 우량주,없음(상시 투자),31.27,-19.26,1.10,1.62,716,18.83,2.54
++s2m_kang,Kang 우량주,t1(미국 신호),15.15,-14.81,0.77,1.02,670,20.01,2.70
++s3m_kang,Kang 우량주,t2(추세),15.89,-20.22,0.71,0.79,491,14.44,1.95
++069500,KODEX200 매수후보유,-,24.72,-36.12,0.99,0.68,0,0.00,0.00
+diff --git a/index.html b/index.html
+index ad4fb35..c44744d 100644
+--- a/index.html
++++ b/index.html
+@@ -387,6 +387,12 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
+         <div class="loading-msg">전략·옵션 선택 후 실행하세요<br><span style="font-size:10px">과거 3년 데이터로 검증 (30~60초 소요)</span></div>
+       </div>
+     </div>
++    <div class="section">
++      <div class="sec-head">섹터·팩터 독립 백테스트 <span class="tag">검증 엔진 · 추천 미반영</span></div>
++      <div id="sector-factor-content">
++        <div class="loading-msg">요약 불러오는 중...</div>
++      </div>
++    </div>
+   </div>
+ 
+   <!-- 매크로 -->
+@@ -550,6 +556,7 @@ let chartViewEnd = null;
+ let chartDragState = null;
+ // 전략 백테스트 상태
+ let stratBtData   = null;
++let sectorFactorData = null;   // 섹터·팩터 독립 백테스트 요약 (읽기 전용)
+ let btStrategy    = 'quant_compare';
+ let btTopN        = 5;
+ let btRebal       = 'M';
+@@ -627,6 +634,7 @@ function switchPanel(id, btn){
+   if(id==='screen' && !screenData) {} // 수동 실행
+   if(id==='bt' && !btData) {}
+   if(id==='stratbt' && !stratBtData) {} // 수동 실행
++  if(id==='stratbt' && !sectorFactorData) loadSectorFactor(); // 요약 카드는 자동 로드
+   if(id==='macro' && !macroLoaded) loadMacro();
+   if(id==='recommend' && !recommendData) loadRecommendPortfolio();
+   if(id==='heatmap' && !heatmapData) loadReturnHeatmap();
+@@ -1479,6 +1487,45 @@ function selBtR(btn){
+   btn.classList.add('active'); btRebal=btn.dataset.br;
+ }
+ 
++// ─── 섹터·팩터 독립 백테스트 요약 카드 (읽기 전용, 추천 엔진 미반영) ──────
++async function loadSectorFactor(){
++  const box = el('sector-factor-content');
++  try{
++    const r = await fetch('/api/sector_factor');
++    if(!r.ok) throw new Error('서버 오류');
++    const d = await r.json();
++    if(!d.ok) throw new Error(d.error || '데이터 없음');
++    sectorFactorData = d;
++    const rows = d.rows.map(row=>{
++      const hl = row.code===d.best_code;
++      const bench = row.is_benchmark;
++      const style = bench ? 'color:var(--mu);font-style:italic'
++                  : hl ? 'font-weight:700;background:#16213a' : '';
++      return `<tr style="${style}">
++        <td style="text-align:left">${row.code}</td>
++        <td style="text-align:left">${row.selection}</td>
++        <td style="text-align:left">${row.gate}</td>
++        <td>${row.cagr_pct==null?'-':row.cagr_pct.toFixed(2)}</td>
++        <td>${row.mdd_pct==null?'-':row.mdd_pct.toFixed(2)}</td>
++        <td>${row.sharpe==null?'-':row.sharpe.toFixed(2)}</td>
++        <td>${row.calmar==null?'-':row.calmar.toFixed(2)}</td>
++        <td>${row.cost_ann_pct==null?'-':row.cost_ann_pct.toFixed(2)}</td>
++      </tr>`;}).join('');
++    box.innerHTML = `
++      <div style="font-size:11px;color:var(--mu);margin-bottom:8px;line-height:1.5">${d.position}</div>
++      <div style="overflow-x:auto"><table class="heatmap-table" style="width:100%">
++        <thead><tr><th>전략</th><th>종목선정</th><th>위험회피 게이트</th>
++        <th>CAGR%</th><th>MDD%</th><th>Sharpe</th><th>Calmar</th><th>연환산비용%</th></tr></thead>
++        <tbody>${rows}</tbody></table></div>
++      <div style="font-size:10px;color:var(--mu);margin-top:8px;line-height:1.5">게이트 정의: ${d.gates}</div>
++      <div style="font-size:11px;color:var(--tx);background:#16213a;border:1px solid var(--bd);border-radius:4px;padding:8px 10px;margin-top:8px;line-height:1.55">
++        <b>후속 검증 후보 (수치 미채택)</b><br>${d.candidate}</div>
++      <div style="font-size:10px;color:var(--mu);margin-top:6px;font-style:italic">원칙: ${d.principle}</div>`;
++  }catch(e){
++    box.innerHTML = `<div class="loading-msg">섹터·팩터 요약을 불러올 수 없습니다: ${e.message}</div>`;
++  }
++}
++
+ async function loadStratBt(){
+   overlay('백테스트 실행 중... (30~60초 소요)');
+   try{
+diff --git a/server.py b/server.py
+index 40c3194..8ca86c2 100644
+--- a/server.py
++++ b/server.py
+@@ -327,6 +327,14 @@ except Exception as _reco_track_e:
+     print(f'  [module] reco track import 실패 - 추천 모의 트랙 비활성화: {_reco_track_e}')
+     _kq_build_reco_track = None
+ 
++try:
++    from kq_tool.backtest.sector_factor_summary import (
++        build_sector_factor_summary as _kq_build_sector_factor_summary,
++    )
++except Exception as _sector_factor_e:
++    print(f'  [module] sector factor summary import 실패 - 섹터·팩터 요약 카드 비활성화: {_sector_factor_e}')
++    _kq_build_sector_factor_summary = None
++
+ try:
+     from kq_tool.backtest.comparison import (
+         build_quant_comparison_response as _kq_build_quant_comparison_response,
+@@ -3064,6 +3072,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
+             portfolio_orders=portfolio_orders,
+             return_heatmap=return_heatmap,
+             reco_track=build_reco_track_response,
++            sector_factor=(
++                (lambda: _kq_build_sector_factor_summary(BASE_DIR))
++                if _kq_build_sector_factor_summary is not None else None
++            ),
+         )
+ 
+     def _read_json_body(self, max_bytes=2000000):
+diff --git a/src/kq_tool/api/routes/get.py b/src/kq_tool/api/routes/get.py
+index 82aac22..bd5df2c 100644
+--- a/src/kq_tool/api/routes/get.py
++++ b/src/kq_tool/api/routes/get.py
+@@ -92,6 +92,8 @@ def build_get_response(
+             "json",
+             services["return_heatmap"](_query_int(query, "limit", 36)),
+         )
++    if path == "/api/sector_factor" and "sector_factor" in services:
++        return make_response("json", services["sector_factor"]())
+     if path == "/api/reco_track" and "reco_track" in services:
+         return make_response(
+             "json",
+diff --git a/src/kq_tool/api/services.py b/src/kq_tool/api/services.py
+index 0d2cb65..8158b74 100644
+--- a/src/kq_tool/api/services.py
++++ b/src/kq_tool/api/services.py
+@@ -20,6 +20,7 @@ OPTIONAL_SERVICE_KEYS = (
+     "portfolio_orders",
+     "return_heatmap",
+     "reco_track",
++    "sector_factor",
+ )
+ 
+ 
+@@ -59,6 +60,7 @@ def build_server_api_services(
+     portfolio_orders: Callable[..., object] | None = None,
+     return_heatmap: Callable[..., object] | None = None,
+     reco_track: Callable[..., object] | None = None,
++    sector_factor: Callable[[], object] | None = None,
+ ) -> dict[str, Callable[..., object]]:
+     """Build the service registry used by the local server handler."""
+ 
+@@ -75,4 +77,5 @@ def build_server_api_services(
+         portfolio_orders=portfolio_orders,
+         return_heatmap=return_heatmap,
+         reco_track=reco_track,
++        sector_factor=sector_factor,
+     )
+diff --git a/src/kq_tool/backtest/sector_factor_summary.py b/src/kq_tool/backtest/sector_factor_summary.py
+new file mode 100644
+index 0000000..e0aef6e
+--- /dev/null
++++ b/src/kq_tool/backtest/sector_factor_summary.py
+@@ -0,0 +1,69 @@
++# -*- coding: utf-8 -*-
++"""섹터·팩터 독립 백테스트(backtest-ksj 계열) 요약 — 전략검증 탭 표시용.
++
++이 모듈은 결과를 '읽어서 보여주기만' 한다. 백테스트 실행·추천 엔진 반영과는
++무관하며, 수치의 정본은 data/strategy_validation/sector_factor_backtest.csv 하나다.
++
++표기 규칙 (팀 합의):
++  - t1/t2는 '위험회피 게이트'로만 부른다 (메인 시스템의 '국면'과 다른 개념).
++  - 조건부 위험회피 결합(국면 확률 활용)은 수치 미채택 — 후속 검증 후보 문구로만 표시.
++"""
++from __future__ import annotations
++
++import csv
++import os
++
++DATA_REL = os.path.join("data", "strategy_validation", "sector_factor_backtest.csv")
++
++POSITION = (
++    "독립 백테스트 — 메인 추천 엔진과 분리된 전략검증 레이어이며 추천 엔진에는 "
++    "반영되지 않습니다. 미국 섹터 모멘텀 상위 3섹터 → 한국 섹터 매핑 → 팩터 종목선정"
++    "(7/5/3 동일가중), 월간 리밸런스, 거래비용 반영."
++)
++GATES = (
++    "t1 — 미국 신호 3종 중 2개 이상 점등 시 전액 현금 "
++    "(S&P500 < 9개월 이평 · VIX > 18.6 · 신용스프레드 z > 1.78) / "
++    "t2 — KODEX200 종가 < 10개월 이평 시 전액 현금."
++)
++CANDIDATE = (
++    "조건부 위험회피 결합은 기존 실험에서 방어 가능성을 보였으나, 현재 채택 라벨과 "
++    "2개월 관측 지연 기준에서는 아직 재검증 전입니다. 따라서 성과 수치로 채택하지 "
++    "않고, 후속 검증 후보로 분리합니다."
++)
++PRINCIPLE = (
++    "성과가 좋아 보이는 전략이라도 동일한 검증 기준을 통과하기 전까지 "
++    "추천 엔진에 반영하지 않습니다."
++)
++
++_NUM_FIELDS = ("cagr_pct", "mdd_pct", "sharpe", "calmar", "trades",
++               "cost_total_pct", "cost_ann_pct")
++
++
++def build_sector_factor_summary(base_dir: str) -> dict:
++    """전략검증 탭용 요약 페이로드. 데이터 파일이 없으면 ok=False로 응답."""
++    path = os.path.join(base_dir, DATA_REL)
++    if not os.path.exists(path):
++        return {"ok": False, "error": f"데이터 파일 없음: {DATA_REL}"}
++    rows = []
++    with open(path, encoding="utf-8-sig", newline="") as f:
++        for row in csv.DictReader(f):
++            out = dict(row)
++            for k in _NUM_FIELDS:
++                try:
++                    out[k] = float(row[k])
++                except (KeyError, TypeError, ValueError):
++                    out[k] = None
++            out["is_benchmark"] = row.get("code") == "069500"
++            rows.append(out)
++    strategies = [r for r in rows if not r["is_benchmark"]]
++    best = max(strategies, key=lambda r: (r["calmar"] is not None, r["calmar"])) if strategies else None
++    return {
++        "ok": True,
++        "rows": rows,
++        "best_code": best["code"] if best else None,
++        "position": POSITION,
++        "gates": GATES,
++        "candidate": CANDIDATE,
++        "principle": PRINCIPLE,
++        "source": DATA_REL,
++    }
+-- 
+2.43.0
+
