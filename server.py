@@ -3051,6 +3051,24 @@ def _run_strategy_backtest_all(top_n, rebalance, period, transaction_cost_bps=0.
     if bench_vals:
         bench_series = pd.Series(bench_vals, index=pd.to_datetime(bench_dates))
         bench_metrics = _perf_metrics(bench_series, ctx['freq'])
+        # 전략별 초과수익/알파/베타 — 단일 실행 모드와 동일 정의로 계산해 표의 빈 값 제거
+        br = bench_series.pct_change().dropna()
+        for run in runs:
+            try:
+                eqs = pd.Series(run['equity'], index=pd.to_datetime(run['dates']))
+                sr = eqs.pct_change().dropna()
+                common = sr.index.intersection(br.index)
+                if len(common) > 5:
+                    srx, brx = sr.loc[common], br.loc[common]
+                    beta = float(np.cov(srx, brx)[0, 1] / np.var(brx)) if np.var(brx) > 0 else 1.0
+                    rm = run.get('metrics') or {}
+                    run['excess'] = dict(
+                        beta=round(beta, 3),
+                        alpha=round(float(rm.get('cagr', 0) or 0) - float(bench_metrics.get('cagr', 0) or 0), 2),
+                        excess_return=round(float(rm.get('total_return', 0) or 0) - float(bench_metrics.get('total_return', 0) or 0), 2),
+                    )
+            except Exception:
+                run['excess'] = {}
 
     best = max(
         runs,

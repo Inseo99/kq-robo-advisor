@@ -76,14 +76,27 @@ def test_screener_diagnostics_show_kang_funnel_and_sector_column() -> None:
     assert "최종" in html
     assert "${v.sector || '-'}" in html
 
-def test_market_report_panel_supports_upload_and_scroll() -> None:
+def test_market_report_upload_removed() -> None:
+    """시황보고서 첨부 기능 삭제 계약 — 등록 UI·핸들러가 되살아나면 실패."""
     html = _index_html()
 
-    assert 'id="mr-file"' in html
-    assert 'id="mr-text"' in html
-    assert 'registerMarketReport()' in html
-    assert 'refreshMarketReport()' in html
-    assert 'max-height:220px;overflow-y:auto' in html
-    assert '/api/market_report' in html
+    assert 'id="mr-file"' not in html
+    assert 'id="mr-text"' not in html
+    assert 'registerMarketReport' not in html
+    assert 'refreshMarketReport' not in html
+    assert 'market-report-context' not in html
+
+
+def test_chart_stage_wiring() -> None:
+    """좌측 차트 스테이지 계약 — 전략검증·ETF배분 차트가 좌측 스테이지에 렌더."""
+    html = _index_html()
+
+    assert 'id="tab-stage"' in html
+    assert 'id="stage-stratbt"' in html
+    assert 'id="stage-bt"' in html
+    assert 'updateChartStage(id)' in html
+    assert 'stage-mode' in html
+    assert "el('stage-stratbt')" in html
+    assert "el('stage-bt')" in html
 
 

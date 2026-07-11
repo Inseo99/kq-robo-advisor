@@ -28,7 +28,13 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
 .qbtn{background:transparent;border:1px solid var(--bd);color:var(--mu);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap;flex-shrink:0}
 .qbtn:hover{color:var(--tx);border-color:var(--mu)}
 /* ── 메인 분할 ── */
-.main{display:grid;grid-template-columns:minmax(360px,1fr) minmax(620px,1.6fr);overflow:hidden}
+.main{display:grid;grid-template-columns:minmax(360px,1fr) minmax(520px,1fr);overflow:hidden}
+/* 좌측 차트 스테이지: 결과 차트가 있는 탭(전략검증·ETF배분)에서 주가 차트 대신 표시 */
+#tab-stage{display:none;flex:1;overflow-y:auto;padding:10px 14px;min-height:0}
+.chart-side.stage-mode .stock-bar,.chart-side.stage-mode .chart-toolbar,
+.chart-side.stage-mode .chart-area,.chart-side.stage-mode .chart-bottom{display:none}
+.chart-side.stage-mode #tab-stage{display:block}
+.stage-title{font-size:12.5px;font-weight:700;color:var(--tx);margin:2px 0 10px}
 /* ── 왼쪽: 차트 영역 ── */
 .chart-side{display:flex;flex-direction:column;border-right:1px solid var(--bd);overflow:hidden;min-width:0}
 .stock-bar{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:12px;flex-shrink:0}
@@ -262,6 +268,11 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
       <button class="itab" onclick="switchInd('vol',this)">거래량</button>
     </div>
     <canvas id="chart-ind"></canvas>
+  </div>
+  <!-- 탭 결과 차트 스테이지 (전략검증·ETF배분 탭에서 주가 차트 대신 표시) -->
+  <div id="tab-stage">
+    <div id="stage-stratbt" style="display:none"><div class="loading-msg">전략검증 탭에서 ▶ 백테스트 실행 시<br>차트가 여기에 표시됩니다</div></div>
+    <div id="stage-bt" style="display:none"><div class="loading-msg">ETF배분 탭에서 ▶ 실행 시<br>차트가 여기에 표시됩니다</div></div>
   </div>
 </div>
 
@@ -656,6 +667,20 @@ function applyDisplayNames(){
 }
 
 // ─── 패널 전환 ─────────────────────────────────────────────────────────────
+const STAGE_TABS = {stratbt:'stage-stratbt', bt:'stage-bt'};
+function updateChartStage(id){
+  const side = document.querySelector('.chart-side');
+  if(!side || !el('tab-stage')) return;
+  const key = STAGE_TABS[id];
+  side.classList.toggle('stage-mode', !!key);
+  Object.values(STAGE_TABS).forEach(sid=>{
+    const n = el(sid); if(n) n.style.display = (key===sid) ? 'block' : 'none';
+  });
+  if(key) setTimeout(()=>{
+    [eqChartInst, uwChartInst, btChartInst].forEach(c=>{ try{ if(c) c.resize(); }catch(e){} });
+  }, 40);
+}
+
 function switchPanel(id, btn){
   currentPanel = id;
   document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
@@ -664,6 +689,7 @@ function switchPanel(id, btn){
   const panel = el('panel-'+id);
   const gridPanels = new Set(['stratbt','robo','bt','recommend']);
   if(panel){ panel.style.display = gridPanels.has(id) ? 'grid' : 'block'; panel.classList.toggle('panel-grid', gridPanels.has(id)); }
+  updateChartStage(id);
   if(id==='screen' && !screenData) {} // 수동 실행
   if(id==='bt' && !btData) {}
   if(id==='stratbt' && !stratBtData) {} // 수동 실행
@@ -1468,7 +1494,13 @@ function renderBacktest(strat){
   const d=btData[strats[0]];
   if(!d){ return; }
 
-  let chartHTML=`<div class="chart-sm"><canvas id="bt-cum-chart"></canvas></div>`;
+  // 차트는 좌측 스테이지에 (스테이지 없으면 기존 위치 유지)
+  const btStage = el('stage-bt');
+  let chartHTML=`<div class="chart-sm" ${btStage?'style="height:380px"':''}><canvas id="bt-cum-chart"></canvas></div>`;
+  if(btStage){
+    btStage.innerHTML = `<div class="stage-title">📈 ETF 자산배분 — 전략 비교 (누적수익)</div>` + chartHTML;
+    chartHTML = '';
+  }
 
   // 현재 전략 메트릭
   const cur=btData[strat]||btData[strats[0]];
@@ -1782,16 +1814,21 @@ function renderStratBt(){
       <div class="stat-chip ${benchClass}"><b>${benchTotal??'-'}%</b><span>${benchLabel}</span></div>
     </div>`;
   }
+  // 차트는 좌측 스테이지에, 표·카드는 우측 패널에 분리 렌더
+  const stratStage = el('stage-stratbt');
+  const chartBlock = `
+    <div class="sec-head" style="margin-top:4px">📈 Equity Curve (전략 vs ${benchLabel})</div>
+    <div class="chart-sm" style="height:${stratStage?320:220}px"><canvas id="eq-chart"></canvas></div>
+
+    <div class="sec-head">📉 언더워터 차트 (낙폭)</div>
+    <div class="chart-sm chart-aux" style="height:${stratStage?170:120}px"><canvas id="uw-chart"></canvas></div>
+  `;
+  if(stratStage) stratStage.innerHTML = `<div class="stage-title">🎯 전략검증 — ${isCompare ? '전체 비교' : stratName} (vs ${benchLabel})</div>` + chartBlock;
   let html=`
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${summaryCards}</div>
 
     ${d.universe_note ? `<div style="font-size:11px;color:var(--mu);border:1px solid var(--bd);background:#161b22;border-radius:4px;padding:7px 9px;margin-bottom:8px;line-height:1.45">${d.universe_note}</div>` : ''}
-
-    <div class="sec-head" style="margin-top:4px">📈 Equity Curve (전략 vs ${benchLabel})</div>
-    <div class="chart-sm" style="height:220px"><canvas id="eq-chart"></canvas></div>
-
-    <div class="sec-head">📉 언더워터 차트 (낙폭)</div>
-    <div class="chart-sm chart-aux" style="height:120px"><canvas id="uw-chart"></canvas></div>
+    ${stratStage ? '' : chartBlock}
   `;
 
   // 성과지표 비교 테이블
@@ -1866,10 +1903,11 @@ function renderStratBt(){
   if(isCompare){
     const rows = compareRuns.map(run=>{
       const rex = run.data?.excess || {};
+      const fmtNum = (v, suffix)=> (v==null || Number.isNaN(v)) ? '-' : `${v>=0?'+':''}${v}${suffix}`;
       return `<tr>
         <td style="color:${run.color || 'var(--bl)'};font-weight:700">${run.label}</td>
-        <td style="text-align:right;color:${(rex.excess_return||0)>=0?'var(--gr)':'var(--rd)'}">${rex.excess_return>=0?'+':''}${rex.excess_return ?? '-'}%p</td>
-        <td style="text-align:right;color:${(rex.alpha||0)>=0?'var(--gr)':'var(--rd)'}">${rex.alpha>=0?'+':''}${rex.alpha ?? '-'}%</td>
+        <td style="text-align:right;color:${(rex.excess_return||0)>=0?'var(--gr)':'var(--rd)'}">${fmtNum(rex.excess_return,'%p')}</td>
+        <td style="text-align:right;color:${(rex.alpha||0)>=0?'var(--gr)':'var(--rd)'}">${fmtNum(rex.alpha,'%')}</td>
         <td style="text-align:right">${rex.beta ?? '-'}</td>
         <td style="text-align:right">${run.data?.n_rebalance ?? '-'}회</td>
       </tr>`;
@@ -1899,8 +1937,22 @@ function renderStratBt(){
     </div>`;
   }
 
+  // 전체 비교 모드: 상단 costs가 비면 각 전략의 costs를 집계해 범위로 표시
+  if(isCompare && (costs.total_turnover==null)){
+    const runCosts = compareRuns.map(r=>r.data?.costs||{}).filter(c=>c.total_turnover!=null);
+    if(runCosts.length){
+      const tos = runCosts.map(c=>c.total_turnover), crs = runCosts.map(c=>(c.total_cost_rate||0)*100);
+      costs.transaction_cost_bps = runCosts[0].transaction_cost_bps;
+      costs.slippage_bps = runCosts[0].slippage_bps;
+      costs.total_turnover = null; // 범위 표기는 costLine에서 처리
+      costs._turnover_range = `${fmt(Math.min(...tos),1)}~${fmt(Math.max(...tos),1)}`;
+      costs._cost_range = `${fmt(Math.min(...crs),2)}~${fmt(Math.max(...crs),2)}`;
+    }
+  }
   if(Object.keys(costs).length){
-    const costLine = `비용 ${costs.transaction_cost_bps??0}bps + 슬리피지 ${costs.slippage_bps??0}bps · 회전율 ${fmt(costs.total_turnover,2)}x · 누적 비용 ${fmt((costs.total_cost_rate||0)*100,2)}% · ${isNetReturns?'net 기준':'gross 기준'}`;
+    const turnoverTxt = costs._turnover_range ? `${costs._turnover_range}x (전략별)` : `${fmt(costs.total_turnover,2)}x`;
+    const costTxt = costs._cost_range ? `${costs._cost_range}% (전략별)` : `${fmt((costs.total_cost_rate||0)*100,2)}%`;
+    const costLine = `비용 ${costs.transaction_cost_bps??0}bps + 슬리피지 ${costs.slippage_bps??0}bps · 회전율 ${turnoverTxt} · 누적 비용 ${costTxt} · ${isNetReturns?'net 기준':'gross 기준'}`;
     html+=`
     <details class="kq-details">
       <summary>${costLine}</summary>
@@ -1908,8 +1960,8 @@ function renderStratBt(){
         <div class="metric-card"><div class="metric-label">거래비용</div><div class="metric-val" style="font-size:13px">${costs.transaction_cost_bps??0}bps</div></div>
         <div class="metric-card"><div class="metric-label">슬리피지</div><div class="metric-val" style="font-size:13px">${costs.slippage_bps??0}bps</div></div>
         <div class="metric-card"><div class="metric-label">무위험수익률</div><div class="metric-val" style="font-size:13px">${fmt(riskFreeRate*100,1)}%/년</div></div>
-        <div class="metric-card"><div class="metric-label">총 회전율</div><div class="metric-val" style="font-size:13px">${fmt(costs.total_turnover,2)}x</div></div>
-        <div class="metric-card"><div class="metric-label">누적 비용</div><div class="metric-val" style="font-size:13px">${fmt((costs.total_cost_rate||0)*100,2)}%</div></div>
+        <div class="metric-card"><div class="metric-label">총 회전율</div><div class="metric-val" style="font-size:13px">${costs._turnover_range ? costs._turnover_range+'x' : fmt(costs.total_turnover,2)+'x'}</div></div>
+        <div class="metric-card"><div class="metric-label">누적 비용</div><div class="metric-val" style="font-size:13px">${costs._cost_range ? costs._cost_range+'%' : fmt((costs.total_cost_rate||0)*100,2)+'%'}</div></div>
         <div class="metric-card"><div class="metric-label">수익률 기준</div><div class="metric-val" style="font-size:13px">${isNetReturns?'비용 차감 후(net)':'비용 차감 전(gross)'}</div></div>
       </div>
     </details>`;
