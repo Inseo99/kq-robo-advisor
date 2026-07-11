@@ -419,7 +419,6 @@ try:
     )
     from kq_tool.regime.response import build_regime_ai_payload as _kq_build_regime_ai_payload
     from kq_tool.regime.market_report import build_market_report_context as _kq_build_market_report_context
-    from kq_tool.regime.market_report import save_user_market_report as _kq_save_user_market_report
     _KQ_REGIME_HELPERS_READY = True
 except Exception as _regime_mod_e:
     print(f'  [module] src/kq_tool regime helper import 실패 - legacy 국면 함수 사용: {_regime_mod_e}')
@@ -429,7 +428,6 @@ except Exception as _regime_mod_e:
     _kq_build_macro_payload = None
     _kq_build_regime_ai_payload = None
     _kq_build_market_report_context = None
-    _kq_save_user_market_report = None
 
 try:
     from kq_tool.screener.engine import build_screener_record as _kq_build_screener_record
@@ -3789,20 +3787,6 @@ def build_market_report_response():
     return dict(ok=True, market_report=_kq_build_market_report_context(BASE_DIR, current_regime=current, regime_order=regime_order))
 
 
-def register_market_report(payload):
-    if _kq_save_user_market_report is None:
-        raise RuntimeError('시장시황보고서 등록 helper를 사용할 수 없습니다.')
-    payload = payload or {}
-    saved = _kq_save_user_market_report(
-        BASE_DIR,
-        title=str(payload.get('title') or payload.get('name') or '사용자 등록 리포트'),
-        text=str(payload.get('text') or payload.get('content') or ''),
-        url=str(payload.get('url') or ''),
-        source=str(payload.get('source') or '사용자 등록'),
-    )
-    response = build_market_report_response()
-    response['saved'] = saved
-    return response
 
 def build_regime_ai_response():
     """AI 매크로 국면 인식 결과 반환 payload를 만든다."""
@@ -3986,9 +3970,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return json.loads(raw.decode('utf-8-sig'))
 
     def do_POST(self):
-        path = self.path.split('?', 1)[0]
-        if path == '/api/market_report':
-            return self._market_report_register()
         return self._empty(404)
 
     def do_GET(self):
@@ -4088,13 +4069,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise RuntimeError('JSON service action helper is unavailable')
         return _kq_run_json_service_action(build_market_report_response, json_action=self._json_action)
 
-    def _market_report_register(self):
-        try:
-            payload = self._read_json_body()
-            self._json(register_market_report(payload))
-        except Exception as exc:
-            traceback.print_exc()
-            self._json(_api_error_payload(exc), 400)
 
     def _regime_ai(self):
         """AI 매크로 국면 인식 결과 반환 (TabPFN + HMM)"""
