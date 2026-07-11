@@ -58,6 +58,10 @@ def _metrics(monthly_ret: pd.Series, freq: int = 12) -> dict:
     nav = (1 + r).cumprod()
     years = len(r) / freq
     total = float(nav.iloc[-1])
+    if total <= 0 or (nav <= 0).any():  # NAV가 0 이하로 붕괴 → CAGR 정의 불가(스케일 오류 등)
+        return {"CAGR%": None, "MDD%": -100.0, "Sharpe": None, "Calmar": None,
+                "누적%": round((total - 1) * 100, 2), "개월": len(r),
+                "주의": "NAV 음수 — 입력 스케일 확인"}
     cagr = total ** (1 / years) - 1
     vol = float(r.std() * np.sqrt(freq))
     sharpe = (cagr - RF) / vol if vol > 0 else 0.0
@@ -104,7 +108,13 @@ def main():
                 "  예: --sat-col 'M1 중형성장주'  (검증탭 Calmar 최우수 전략)")
         sat = pd.Series(pd.to_numeric(sdf[vcol], errors="coerce").values,
                         index=pd.to_datetime(sdf[dcol]).dt.to_period("M"))
-        print(f"[위성] '{vcol}' 컬럼 사용")
+        # 스케일 자동 정규화: 퍼센트(예 5.0) → 소수(0.05). 코어 수익률(소수)과 단위 일치.
+        med = float(sat.abs().median())
+        if med > 1.0:
+            sat = sat / 100.0
+            print(f"[위성] '{vcol}' 컬럼 사용 — 퍼센트 스케일 감지(중앙값 {med:.2f}) → /100 소수 변환")
+        else:
+            print(f"[위성] '{vcol}' 컬럼 사용 (소수 스케일)")
 
     for m in ret.index:
         reg = lagged_regime.get(m)
