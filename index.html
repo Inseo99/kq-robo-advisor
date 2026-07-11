@@ -2287,9 +2287,70 @@ function _recBadge(sig){
   return `<span class="badge ${cls}">${sig||'관망'}</span>`;
 }
 
+// ─── 코어-위성 후보 (참고 · OOS 검증 전 · 실추천 미반영) ──────────────────
+const CORE_RATIO = 0.70, SAT_RATIO = 0.30;
+function _bestSatelliteStrategy(){
+  // 검증탭 요약이 로드돼 있으면 Calmar 최고, 없으면 s1m_kang(중형성장주) 기본
+  const code = (sectorFactorData && sectorFactorData.best_code) || 's1m_kang';
+  const label = (sectorFactorData?.rows||[]).find(r=>r.code===code)?.display_code
+    || (code==='s1m_kang' ? 'M1 중형성장주' : code);
+  return {code, label};
+}
+function renderCoreSatelliteCandidate(d){
+  // 주식 버킷 = KODEX200(069500) 비중
+  const eq = (d.assets||[]).find(a=>String(a.ticker).startsWith('069500'));
+  const eqW = eq ? Number(eq.weight) : null;
+  if(eqW == null || eqW <= 0) return '';
+  const best = _bestSatelliteStrategy();
+  const coreW = +(eqW * CORE_RATIO).toFixed(1);
+  const satW = +(eqW * SAT_RATIO).toFixed(1);
+  // 위성 종목 = 스크리너 최고 전략 picks (게이트 없는 상시투자 = 종목선정 동일)
+  const picks = (screenData && screenData.screeners && screenData.screeners[best.code]) || [];
+  const names = (screenData && screenData.data) || {};
+  let satBody;
+  if(picks.length){
+    const per = +(satW / picks.length).toFixed(2);
+    const chips = picks.map(t=>{
+      const nm = names[t]?.name || t;
+      return `<span class="badge b-bl" title="${t}">${nm} ${per}%</span>`;
+    }).join(' ');
+    satBody = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${chips}</div>
+      <div style="font-size:10px;color:var(--mu);margin-top:4px">${best.label} ${picks.length}종목 · 각 ${per}% (동일가중)</div>`;
+  } else {
+    satBody = `<div style="font-size:11px;color:var(--mu);margin-top:4px">위성 종목은 스크리너에서 로드됩니다 — 스크리너 탭 실행 후 자동 반영. (${best.label})</div>`;
+  }
+  return `<div class="section">
+    <div class="sec-head">코어-위성 후보 <span class="tag" style="background:#8957e522;color:#a371f7">참고 · 실추천 미반영</span></div>
+    <div style="background:#161b22;border:1px solid var(--bd);border-radius:6px;padding:9px;font-size:11px;line-height:1.6">
+      <div style="color:var(--mu);margin-bottom:6px">국면 레이어가 정한 주식 ${eqW}%를 코어-위성으로 확장한 <b>후보</b>입니다.
+        코어는 KODEX200, 위성은 검증탭 <b>Calmar 최우수</b> 전략(게이트 없는 상시투자) 종목. 채권·금·현금은 기존 배분 유지.</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <div style="flex:1;background:#21262d;border-radius:5px;padding:7px">
+          <div style="font-size:10px;color:var(--mu)">코어 70% (패시브)</div>
+          <div style="font-weight:700">KODEX200 <span style="color:var(--bl)">${coreW}%</span></div>
+        </div>
+        <div style="flex:1;background:#21262d;border-radius:5px;padding:7px">
+          <div style="font-size:10px;color:var(--mu)">위성 30% (액티브)</div>
+          <div style="font-weight:700">${best.label} <span style="color:#a371f7">${satW}%</span></div>
+        </div>
+      </div>
+      ${satBody}
+      <div style="font-size:10px;color:var(--mu);margin-top:7px;border-top:1px solid var(--bd);padding-top:6px">
+        주식 버킷은 코어-위성 구조로 확장 가능하다. 코어는 KODEX200, 위성은 검증탭에서 Calmar 기준 우수한 스크리너 전략 종목으로 구성한다.
+        단, 현재는 통합 OOS 검증 전이므로 실추천이 아닌 <b>후보 배분</b>으로 표시한다.
+      </div>
+    </div></div>`;
+}
+
 function renderRecommendPortfolio(){
   const d = recommendData;
   if(!d){ return; }
+  // 위성 종목 표시를 위해 스크리너 데이터가 없으면 1회 백그라운드 로드 후 재렌더
+  if(!screenData){
+    fetch('/api/screen').then(r=>r.ok?r.json():null).then(j=>{
+      if(j && !j.error){ screenData=j; if(currentPanel==='recommend' && recommendData) renderRecommendPortfolio(); }
+    }).catch(()=>{});
+  }
   const reg = d.regime || {};
   const validity = d.validity || {};
   const probs = reg.probs || {};
@@ -2382,6 +2443,8 @@ function renderRecommendPortfolio(){
     </tr>`;
   });
   html += `</table></div>`;
+
+  html += renderCoreSatelliteCandidate(d);
 
   html += `<div class="section"><details class="kq-details"><summary>구성 방식 · 검증 근거 (펼치기)</summary>
     <div style="font-size:11px;color:var(--mu);line-height:1.7;background:#21262d;border-radius:6px;padding:8px;margin-top:6px">
