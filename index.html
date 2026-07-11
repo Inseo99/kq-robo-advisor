@@ -114,7 +114,8 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
 .strat-btn:hover,.strat-btn.active{background:#21262d;color:var(--tx);border-color:var(--mu)}
 /* Alpha Decay 패널 */
 .decay-chart{height:150px;margin-bottom:10px}
-.hl-list{display:flex;flex-direction:column;gap:6px}
+.hl-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+@media(max-width:1500px){.hl-list{grid-template-columns:1fr}}
 .hl-row{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#21262d;border-radius:6px}
 .hl-name{font-size:12px}
 .hl-val{font-size:12px;font-weight:700}
@@ -2278,14 +2279,14 @@ function renderRecommendPortfolio(){
   });
   html += `</table></div>`;
 
-  html += `<div class="section"><div class="sec-head">구성 방식</div>
-    <div style="font-size:11px;color:var(--mu);line-height:1.7;background:#21262d;border-radius:6px;padding:8px">
+  html += `<div class="section"><details class="kq-details"><summary>구성 방식 · 검증 근거 (펼치기)</summary>
+    <div style="font-size:11px;color:var(--mu);line-height:1.7;background:#21262d;border-radius:6px;padding:8px;margin-top:6px">
       ${d.construction?.method || ''}<br>
       ${targetSourceLine ? targetSourceLine + '<br>' : ''}
       ${alphaLine ? alphaLine + '<br>' : ''}
       ${validity.review_rule || ''}<br>
       ${d.caveat || ''}
-    </div></div>`;
+    </div></details></div>`;
 
   el('rec-content').innerHTML = html;
   renderProfilePills();
