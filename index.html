@@ -272,7 +272,13 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
   </div>
   <!-- 탭 결과 차트 스테이지 (전략검증·ETF배분 탭에서 주가 차트 대신 표시) -->
   <div id="tab-stage">
-    <div id="stage-stratbt" style="display:none"><div class="loading-msg">전략검증 탭에서 ▶ 백테스트 실행 시<br>차트가 여기에 표시됩니다</div></div>
+    <div id="stage-stratbt" style="display:none">
+      <div id="stage-stratbt-chart"><div class="loading-msg">전략검증 탭에서 ▶ 백테스트 실행 시<br>차트가 여기에 표시됩니다</div></div>
+      <div id="stage-sector-factor" style="margin-top:14px">
+        <div class="sec-head">섹터·팩터 독립 백테스트 <span class="tag">검증 엔진 · 추천 미반영</span></div>
+        <div id="sector-factor-content"><div class="loading-msg">요약 불러오는 중...</div></div>
+      </div>
+    </div>
     <div id="stage-bt" style="display:none"><div class="loading-msg">ETF배분 탭에서 ▶ 실행 시<br>차트가 여기에 표시됩니다</div></div>
   </div>
 </div>
@@ -432,21 +438,16 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
         <button class="strat-btn active" data-br="M" onclick="selBtR(this)">월</button>
         <button class="strat-btn" data-br="Q" onclick="selBtR(this)">분기</button>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;align-items:center">
         <span style="font-size:11px;color:var(--mu)">거래비용 bps:</span>
-        <input id="bt-cost-bps" class="num-input" type="number" min="0" step="1" value="10">
+        <input id="bt-cost-bps" class="num-input" type="number" min="0" step="1" value="25">
         <span style="font-size:11px;color:var(--mu);margin-left:6px">슬리피지 bps:</span>
-        <input id="bt-slip-bps" class="num-input" type="number" min="0" step="1" value="5">
+        <input id="bt-slip-bps" class="num-input" type="number" min="0" step="1" value="0">
       </div>
+      <div style="font-size:10px;color:var(--mu);margin-bottom:8px">정본 방식: 거래비용 왕복 0.5%(편도 0.25% = 25bps) · 슬리피지 거래비용에 포함(0) · 현금 연 2%</div>
       <button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:10px" onclick="loadStratBt()">▶ 백테스트 실행</button>
       <div id="stratbt-content">
         <div class="loading-msg">전략·옵션 선택 후 실행하세요<br><span style="font-size:10px">6개 섹터·팩터 전략 앱 근사 백테스트 (30~60초 소요)</span></div>
-      </div>
-    </div>
-    <div class="section">
-      <div class="sec-head">섹터·팩터 독립 백테스트 <span class="tag">검증 엔진 · 추천 미반영</span></div>
-      <div id="sector-factor-content">
-        <div class="loading-msg">요약 불러오는 중...</div>
       </div>
     </div>
   </div>
@@ -1815,14 +1816,14 @@ function renderStratBt(){
       <div class="stat-chip ${benchClass}"><b>${benchTotal??'-'}%</b><span>${benchLabel}</span></div>
     </div>`;
   }
-  // 차트는 좌측 스테이지에, 표·카드는 우측 패널에 분리 렌더
-  const stratStage = el('stage-stratbt');
+  // 차트는 좌측 스테이지(차트 전용 하위 컨테이너)에, 표·카드는 우측 패널에 분리 렌더
+  const stratStage = el('stage-stratbt-chart');
   const chartBlock = `
     <div class="sec-head" style="margin-top:4px">📈 Equity Curve (전략 vs ${benchLabel})</div>
-    <div class="chart-sm" style="height:${stratStage?320:220}px"><canvas id="eq-chart"></canvas></div>
+    <div class="chart-sm" style="height:${stratStage?300:220}px"><canvas id="eq-chart"></canvas></div>
 
     <div class="sec-head">📉 언더워터 차트 (낙폭)</div>
-    <div class="chart-sm chart-aux" style="height:${stratStage?170:120}px"><canvas id="uw-chart"></canvas></div>
+    <div class="chart-sm chart-aux" style="height:${stratStage?150:120}px"><canvas id="uw-chart"></canvas></div>
   `;
   if(stratStage) stratStage.innerHTML = `<div class="stage-title">🎯 전략검증 — ${isCompare ? '전체 비교' : stratName} (vs ${benchLabel})</div>` + chartBlock;
   let html=`

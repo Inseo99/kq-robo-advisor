@@ -93,10 +93,31 @@ def test_chart_stage_wiring() -> None:
 
     assert 'id="tab-stage"' in html
     assert 'id="stage-stratbt"' in html
+    assert 'id="stage-stratbt-chart"' in html
     assert 'id="stage-bt"' in html
     assert 'updateChartStage(id)' in html
     assert 'stage-mode' in html
-    assert "el('stage-stratbt')" in html
+    assert "el('stage-stratbt-chart')" in html
     assert "el('stage-bt')" in html
+
+
+def test_sector_factor_card_in_left_stage() -> None:
+    """섹터·팩터 독립 백테스트 카드가 좌측 스테이지에 위치(우측 패널 중복 없음)."""
+    html = _index_html()
+
+    assert 'id="stage-sector-factor"' in html
+    assert html.count('id="sector-factor-content"') == 1
+    # 좌측 스테이지 컨테이너 안쪽에 있어야 함
+    stage_start = html.index('id="stage-stratbt"')
+    stage_end = html.index('id="stage-bt"')
+    assert 'id="sector-factor-content"' in html[stage_start:stage_end]
+
+
+def test_backtest_cost_defaults_match_canonical_engine() -> None:
+    """전략검증 백테스트 기본 비용 = 정본 엔진(왕복 0.5% = 25bps 편도, 슬리피지 0)."""
+    html = _index_html()
+
+    assert 'id="bt-cost-bps" class="num-input" type="number" min="0" step="1" value="25"' in html
+    assert 'id="bt-slip-bps" class="num-input" type="number" min="0" step="1" value="0"' in html
 
 
