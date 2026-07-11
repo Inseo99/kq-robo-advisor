@@ -70,7 +70,9 @@ def _metrics(monthly_ret: pd.Series, freq: int = 12) -> dict:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--satellite", help="위성 월수익률 CSV (date,ret 또는 1개 수치열)")
+    ap.add_argument("--satellite", help="위성 월수익률 CSV (export_strategy_heatmap.py 산출물 그대로 가능)")
+    ap.add_argument("--sat-col", help="위성으로 쓸 컬럼명 (다중 컬럼 CSV 필수 — 예: 'M1 중형성장주'). "
+                                      "미지정 시 컬럼 목록을 출력하고 중단")
     ap.add_argument("--lag", type=int, default=1, help="국면 관측 지연(개월). 기본 1, 엄격 2")
     ap.add_argument("--oos-start", default="2020-01", help="OOS 구간 시작(YYYY-MM)")
     args = ap.parse_args()
@@ -87,11 +89,22 @@ def main():
 
     sat = None
     if args.satellite and os.path.exists(args.satellite):
-        sdf = pd.read_csv(args.satellite)
+        sdf = pd.read_csv(args.satellite, encoding="utf-8-sig")
         dcol = next((c for c in sdf.columns if "date" in c.lower() or "월" in c), sdf.columns[0])
-        vcol = next((c for c in sdf.columns if c != dcol), sdf.columns[-1])
+        value_cols = [c for c in sdf.columns if c != dcol]
+        if len(value_cols) == 1:
+            vcol = value_cols[0]
+        elif args.sat_col and args.sat_col in sdf.columns:
+            vcol = args.sat_col
+        else:
+            # 다중 컬럼인데 미지정 → 조용한 오류 방지, 컬럼 목록 출력 후 중단
+            raise SystemExit(
+                "위성 CSV에 컬럼이 여러 개입니다. --sat-col 로 명시하세요.\n"
+                f"  사용 가능 컬럼: {value_cols}\n"
+                "  예: --sat-col 'M1 중형성장주'  (검증탭 Calmar 최우수 전략)")
         sat = pd.Series(pd.to_numeric(sdf[vcol], errors="coerce").values,
                         index=pd.to_datetime(sdf[dcol]).dt.to_period("M"))
+        print(f"[위성] '{vcol}' 컬럼 사용")
 
     for m in ret.index:
         reg = lagged_regime.get(m)
