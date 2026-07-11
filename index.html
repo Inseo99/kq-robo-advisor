@@ -448,7 +448,14 @@ html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI
         <input id="bt-slip-bps" class="num-input" type="number" min="0" step="1" value="0">
       </div>
       <div style="font-size:10px;color:var(--mu);margin-bottom:8px">정본 방식: 거래비용 왕복 0.5%(편도 0.25% = 25bps) · 슬리피지 거래비용에 포함(0) · 현금 연 2%</div>
-      <button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:10px" onclick="loadStratBt()">▶ 백테스트 실행</button>
+      <button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px" onclick="loadStratBt()">▶ 백테스트 실행</button>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;font-size:11px;color:var(--mu)">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="bt-exclude-toggle" onchange="if(stratBtData)renderStratBt()"> 최근
+        </label>
+        <input id="bt-exclude-months" class="num-input" type="number" min="1" step="1" value="12" style="width:52px" onchange="if(stratBtData&&el('bt-exclude-toggle').checked)renderStratBt()">
+        <span>개월 제외 비교 (급등 구간 강건성)</span>
+      </div>
       <div id="stratbt-content">
         <div class="loading-msg">전략·옵션 선택 후 실행하세요<br><span style="font-size:10px">6개 섹터·팩터 전략 앱 근사 백테스트 (30~60초 소요)</span></div>
       </div>
@@ -1738,6 +1745,77 @@ function alignCurve(dates, values, labels){
   });
 }
 
+// ─── 기간 제외 강건성: 자산곡선에서 지표 재계산 (서버 _perf_metrics와 동일 공식) ───
+function _stdSample(arr){
+  const n=arr.length; if(n<2) return 0;
+  const m=arr.reduce((a,b)=>a+b,0)/n;
+  return Math.sqrt(arr.reduce((a,b)=>a+(b-m)*(b-m),0)/(n-1));
+}
+function _perfFromEquity(eq, freq=12, rf=0.035){
+  if(!eq || eq.length<4) return null;
+  const rets=[]; for(let i=1;i<eq.length;i++){ if(eq[i-1]>0) rets.push(eq[i]/eq[i-1]-1); }
+  const n=rets.length; if(n<3) return null;
+  const years=n/freq, total=eq[eq.length-1]/eq[0];
+  const cagr=years>0?Math.pow(total,1/years)-1:0;
+  const vol=_stdSample(rets)*Math.sqrt(freq);
+  const sharpe=vol>0?(cagr-rf)/vol:0;
+  let peak=eq[0], mdd=0;
+  for(const v of eq){ if(v>peak)peak=v; const dd=(v-peak)/peak; if(dd<mdd)mdd=dd; }
+  const calmar=Math.abs(mdd)>1e-6?cagr/Math.abs(mdd):0;
+  return {cagr:+(cagr*100).toFixed(2), mdd:+(mdd*100).toFixed(2), sharpe:+sharpe.toFixed(3),
+          calmar:+calmar.toFixed(3), total:+((total-1)*100).toFixed(2)};
+}
+function _sliceExcludingRecent(dates, equity, months){
+  if(!dates || !dates.length) return {dates:[], equity:[]};
+  const last=new Date(dates[dates.length-1]);
+  const cutoff=new Date(last); cutoff.setMonth(cutoff.getMonth()-months);
+  const od=[], oe=[];
+  for(let i=0;i<dates.length;i++){ if(new Date(dates[i])<=cutoff){ od.push(dates[i]); oe.push(equity[i]); } }
+  return {dates:od, equity:oe};
+}
+function _excludeComparisonHtml(freq){
+  const on = el('bt-exclude-toggle')?.checked;
+  if(!on || !stratBtData) return '';
+  const months = Math.max(1, +(el('bt-exclude-months')?.value || 12));
+  const d = stratBtData;
+  // 전략 목록 (전체비교/단일 공통) + 벤치마크
+  const series = [];
+  if(d.compare && Array.isArray(d.runs)){
+    d.runs.forEach(r=>{ if(!r.error) series.push({label:r.strategy_label||stratBtLabel(r.strategy), color:r.color||stratBtColor(r.strategy), dates:r.dates, equity:r.equity}); });
+  } else if(d.dates && d.equity){
+    series.push({label:stratBtLabel(d.strategy), color:'#7bb5ff', dates:d.dates, equity:d.equity});
+  }
+  if(d.benchmark && d.benchmark_dates) series.push({label:(d.benchmark_label||'KODEX200'), color:'#8b949e', dates:d.benchmark_dates, equity:d.benchmark, bench:true});
+  if(!series.length) return '';
+  const rows = series.map(s=>{
+    const full=_perfFromEquity(s.equity, freq);
+    const excl=_perfFromEquity(_sliceExcludingRecent(s.dates, s.equity, months).equity, freq);
+    if(!full) return '';
+    const cell=(v,unit='')=> v==null?'-':`${v}${unit}`;
+    const dCagr = (full&&excl)? +(excl.cagr-full.cagr).toFixed(2) : null;
+    return `<tr>
+      <td style="color:${s.color};font-weight:700${s.bench?';font-style:italic':''}">${s.label}</td>
+      <td style="text-align:right">${cell(full?.cagr,'%')}</td>
+      <td style="text-align:right">${cell(full?.calmar)}</td>
+      <td style="text-align:right;border-left:1px solid var(--bd)">${cell(excl?.cagr,'%')}</td>
+      <td style="text-align:right">${cell(excl?.calmar)}</td>
+      <td style="text-align:right;color:${(dCagr||0)<0?'var(--rd)':'var(--gr)'}">${dCagr==null?'-':(dCagr>=0?'+':'')+dCagr+'%p'}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="sec-head" style="margin-top:10px">📅 최근 ${months}개월 제외 강건성 <span style="color:var(--mu);font-weight:400;font-size:10px">CAGR·Calmar 재계산</span></div>
+    <table class="sig-table" style="font-size:11px">
+      <tr><th style="text-align:left;color:var(--mu);font-size:10px">전략</th>
+          <th colspan="2" style="text-align:center;color:var(--mu);font-size:10px">전체 기간</th>
+          <th colspan="2" style="text-align:center;color:var(--mu);font-size:10px;border-left:1px solid var(--bd)">최근 ${months}M 제외</th>
+          <th style="text-align:right;color:var(--mu);font-size:10px">ΔCAGR</th></tr>
+      <tr><th></th><th style="text-align:right;color:var(--mu);font-size:9px">CAGR</th><th style="text-align:right;color:var(--mu);font-size:9px">Calmar</th>
+          <th style="text-align:right;color:var(--mu);font-size:9px;border-left:1px solid var(--bd)">CAGR</th><th style="text-align:right;color:var(--mu);font-size:9px">Calmar</th><th></th></tr>
+      ${rows}
+    </table>
+    <div style="font-size:10px;color:var(--mu);margin-top:4px;line-height:1.5">최근 ${months}개월(코스피 급등 구간)을 제외한 강건성 점검. ΔCAGR이 크게 음(−)이면 성과가 최근 구간에 집중됨을 의미합니다.</div>`;
+}
+
 function renderStratBt(){
   const d=stratBtData;
   const m=d.metrics||{}, bm=d.bench_metrics||{}, ex=d.excess||{};
@@ -2016,6 +2094,8 @@ function renderStratBt(){
       }
     }
   }
+
+  html += _excludeComparisonHtml(d.freq || 12);
 
   el('stratbt-content').innerHTML=html;
 
